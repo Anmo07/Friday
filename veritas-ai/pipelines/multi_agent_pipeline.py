@@ -10,6 +10,7 @@ from tools.kg_tools import kg_build_tool, kg_validate_tool
 from core.firewall import HallucinationFirewall
 from core.alert_engine import AlertEngine
 from core.consensus_engine import ConsensusEngine
+from core.explainability_layer import ExplainabilityLayer
 from models.schemas import QueryResponse
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
@@ -126,9 +127,13 @@ async def misinformation_consumer_node():
         consensus_overrider = ConsensusEngine()
         unified_consensus_response = consensus_overrider.evaluate(formatted_response)
         
+        # Phase 16: Expand Explanation mapping securely over the natively merged array limits
+        explainer = ExplainabilityLayer()
+        explained_response = explainer.evaluate(unified_consensus_response)
+        
         # Enforce Hallucination Constraints Overrides explicitly globally
         firewall = HallucinationFirewall()
-        final_res = firewall.evaluate(unified_consensus_response)
+        final_res = firewall.evaluate(explained_response)
         
         # Phase 14: Global Alert Engine Check overrides logically
         alert_engine = AlertEngine()
