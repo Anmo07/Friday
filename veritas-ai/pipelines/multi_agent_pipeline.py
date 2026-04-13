@@ -8,6 +8,7 @@ from tools.nlp_tools import fake_news_detector_tool
 from tools.truth_tools import truth_scoring_tool
 from tools.kg_tools import kg_build_tool, kg_validate_tool
 from core.firewall import HallucinationFirewall
+from core.alert_engine import AlertEngine
 from models.schemas import QueryResponse
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
@@ -123,6 +124,12 @@ async def misinformation_consumer_node():
         # Enforce Hallucination Constraints Overrides explicitly globally
         firewall = HallucinationFirewall()
         final_res = firewall.evaluate(formatted_response)
+        
+        # Phase 14: Global Alert Engine Check overrides logically
+        alert_engine = AlertEngine()
+        triggered_alerts = alert_engine.evaluate(final_res)
+        for alert in triggered_alerts:
+            await event_bus.publish("global_alerts", "ALERT_TRIGGERED", alert)
         
         # Map response back down to the suspended Endpoint hook structurally 
         if session_id in event_bus.response_futures:
