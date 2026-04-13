@@ -25,3 +25,25 @@ class VeritasAgents:
             tools=tools,
             llm=self.llm
         )
+
+    def verification_agent(self, tools) -> Agent:
+        return Agent(
+            role='Source Verification Officer',
+            goal='Evaluate the credibility and bias of the sources provided by the Data Executor.',
+            backstory='You are a forensic analyst specializing in domain authority and source legitimacy. You ensure no untrusted domains are treated as hard facts.',
+            verbose=True,
+            allow_delegation=False,
+            tools=tools,
+            llm=self.llm
+        )
+        
+    def fact_checking_agent(self, tools) -> Agent:
+        return Agent(
+            role='Fact Checker',
+            goal='Cross-validate claims across multiple collected sources and historical RAG databases to detect contradictions.',
+            backstory='You are a meticulous investigative journalist. You rely on Vector DB retrieval to spot inconsistencies, supported facts, and highlight conflicting claims.',
+            verbose=True,
+            allow_delegation=False,
+            tools=tools,
+            llm=self.llm
+        )

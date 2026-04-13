@@ -1,6 +1,8 @@
 from crewai import Task, Crew, Process
 from agents.veritas_agents import VeritasAgents
-from tools.base_tools import search_web_tool
+from tools.web_scraper import web_scrape_tool
+from tools.news_api import news_search_tool
+from tools.rss_reader import rss_reader_tool
 from models.schemas import QueryResponse
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
@@ -49,7 +51,7 @@ async def run_multi_agent_pipeline(query: str) -> QueryResponse:
     Initializes a Planner and Executor to handle the user query sequentially.
     """
     agents = VeritasAgents()
-    tools = [search_web_tool]
+    tools = [news_search_tool, web_scrape_tool, rss_reader_tool]
     
     planner = agents.planner_agent()
     executor = agents.executor_agent(tools)
