@@ -1,0 +1,58 @@
+name: Veritas AI CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest flake8
+
+      - name: Lint
+        run: flake8 --max-line-length=120 --ignore=E501,W503 api/ core/ feedback/ models/ pipelines/ tools/
+
+      - name: Run tests
+        run: pytest tests/ -v --tb=short
+
+  build-backend:
+    needs: lint-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build backend Docker image
+        run: docker build -t veritas-backend:${{ github.sha }} .
+
+  build-frontend:
+    needs: lint-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build frontend Docker image
+        run: docker build -t veritas-frontend:${{ github.sha }} ./frontend
+
+  deploy:
+    needs: [build-backend, build-frontend]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy notice
+        run: echo "Production deployment would be triggered here via kubectl or cloud CLI."
