@@ -58,3 +58,14 @@ class VeritasAgents:
             tools=tools,
             llm=self.llm
         )
+        
+    def critic_agent(self) -> Agent:
+        return Agent(
+            role='Chief Intelligence Critic',
+            goal='Validate the drafted intelligence report for logical consistency, implicit bias, and structural adherence to reality before emission.',
+            backstory='You are a cynical, strict chief editor. You review the final intelligence report. You ruthlessly look for internal contradictions, assure that fake news probabilities logically align with fact-checker statements, and aggressively rewrite hallucinations into objective uncertainty.',
+            verbose=True,
+            allow_delegation=False,
+            tools=[],
+            llm=self.llm
+        )

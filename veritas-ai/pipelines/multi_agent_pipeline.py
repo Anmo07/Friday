@@ -60,6 +60,7 @@ async def run_multi_agent_pipeline(query: str) -> QueryResponse:
     verifier = agents.verification_agent([domain_credibility_tool])
     fact_checker = agents.fact_checking_agent([rag_fact_check_tool])
     fake_news_analyzer = agents.fake_news_agent([fake_news_detector_tool])
+    critic = agents.critic_agent()
     
     planning_task = Task(
         description=f"Analyze query: '{query}'. Create a step-by-step strategy to gather data.",
@@ -91,9 +92,15 @@ async def run_multi_agent_pipeline(query: str) -> QueryResponse:
         agent=fake_news_analyzer
     )
     
+    critic_task = Task(
+        description="Conduct a multi-pass validation loop over the entire narrative constructed by the Misinformation Analyst and Fact Checker. Fix any conflicting tones, ensure facts don't contradict themselves without explicitly stating the conflict, guarantee no hallucinations occurred, and finalize the payload into a strictly objective and transparent summary.",
+        expected_output="An objectively perfected, fully scrutinized final intelligence report devoid of narrative inconsistencies or unchecked bias.",
+        agent=critic
+    )
+    
     crew = Crew(
-        agents=[planner, executor, verifier, fact_checker, fake_news_analyzer],
-        tasks=[planning_task, execution_task, verification_task, fact_check_task, fake_news_task],
+        agents=[planner, executor, verifier, fact_checker, fake_news_analyzer, critic],
+        tasks=[planning_task, execution_task, verification_task, fact_check_task, fake_news_task, critic_task],
         process=Process.sequential,
         verbose=True
     )
