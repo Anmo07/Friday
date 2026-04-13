@@ -17,6 +17,11 @@ class Settings(BaseSettings):
     NEWS_API_KEY: str = os.getenv("NEWS_API_KEY", "")
     GNEWS_API_KEY: str = os.getenv("GNEWS_API_KEY", "")
 
+    # Knowledge Graph Settings
+    NEO4J_URI: str = os.getenv("NEO4J_URI", "bolt://localhost:7687")
+    NEO4J_USER: str = os.getenv("NEO4J_USER", "neo4j")
+    NEO4J_PASSWORD: str = os.getenv("NEO4J_PASSWORD", "password")
+
     class Config:
         env_file = ".env"
 

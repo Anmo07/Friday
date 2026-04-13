@@ -5,6 +5,7 @@ from tools.news_api import news_search_tool
 from tools.rss_reader import rss_reader_tool
 from tools.verification_tools import domain_credibility_tool, rag_fact_check_tool
 from tools.nlp_tools import fake_news_detector_tool
+from tools.truth_tools import truth_scoring_tool
 from models.schemas import QueryResponse
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
@@ -60,7 +61,7 @@ async def run_multi_agent_pipeline(query: str) -> QueryResponse:
     verifier = agents.verification_agent([domain_credibility_tool])
     fact_checker = agents.fact_checking_agent([rag_fact_check_tool])
     fake_news_analyzer = agents.fake_news_agent([fake_news_detector_tool])
-    critic = agents.critic_agent()
+    critic = agents.critic_agent([truth_scoring_tool])
     
     planning_task = Task(
         description=f"Analyze query: '{query}'. Create a step-by-step strategy to gather data.",
@@ -93,8 +94,8 @@ async def run_multi_agent_pipeline(query: str) -> QueryResponse:
     )
     
     critic_task = Task(
-        description="Conduct a multi-pass validation loop over the entire narrative constructed by the Misinformation Analyst and Fact Checker. Fix any conflicting tones, ensure facts don't contradict themselves without explicitly stating the conflict, guarantee no hallucinations occurred, and finalize the payload into a strictly objective and transparent summary.",
-        expected_output="An objectively perfected, fully scrutinized final intelligence report devoid of narrative inconsistencies or unchecked bias.",
+        description="Conduct a multi-pass validation loop over the entire narrative constructed by the Misinformation Analyst and Fact Checker. Fix any conflicting tones, ensure facts don't contradict themselves without explicitly stating the conflict, guarantee no hallucinations occurred, and finalize the payload into a strictly objective and transparent summary. \nCRITICAL: Formulate the aggregated mathematical metrics mapping sources, anomalies, and claims into a strict JSON dictionary and explicitly execute the 'Truth Scoring Engine' tool. Append the tool's resulting baseline 'truth_score' directly into the final report payload alongside the bias probability.",
+        expected_output="An objectively perfected, fully scrutinized final intelligence report containing embedded NLP Fake Probabilities and the mathematical Truth Score mapped seamlessly into the narrative.",
         agent=critic
     )
     
