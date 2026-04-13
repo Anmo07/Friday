@@ -8,10 +8,11 @@ langchain-ollama==0.1.0
 langchain-chroma==0.1.2
 chromadb==0.5.3
 langchain-text-splitters==0.2.2
-crewai==0.35.8
+crewai
 playwright==1.44.0
 feedparser==6.0.11
 requests==2.32.3
 transformers==4.42.4
 torch==2.3.1
 websockets==12.0
+cachetools==5.3.3
