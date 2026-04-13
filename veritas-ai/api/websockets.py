@@ -2,8 +2,10 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pipelines.multi_agent_pipeline import run_multi_agent_pipeline
 from pipelines.event_bus import event_bus
 import asyncio
+from pipelines.message_models import * # Keep imports clean
 import json
 import logging
+from core.cache_layer import query_cache
 
 router = APIRouter(prefix="/ws")
 
@@ -45,6 +47,20 @@ async def websocket_query_endpoint(websocket: WebSocket):
                 await websocket.send_json({"error": "Empty query payload blocked logically."})
                 continue
                 
+            # Cache Interception Path natively
+            cached_result = query_cache.get(query)
+            if cached_result:
+                await websocket.send_json({
+                    "status": "processing",
+                    "message": "Instant Cache Hit: Loading Intelligence..."
+                })
+                await asyncio.sleep(0.5) # UX stabilization logic
+                await websocket.send_json({
+                    "status": "complete",
+                    "data": cached_result.model_dump()
+                })
+                continue
+
             await websocket.send_json({
                 "status": "processing", 
                 "message": f"Orchestrating autonomous logic streams globally for: {query}"
@@ -54,6 +70,9 @@ async def websocket_query_endpoint(websocket: WebSocket):
             try:
                 response = await run_multi_agent_pipeline(query)
                 
+                # Save to explicit deterministic Cache dynamically
+                query_cache.set(query, response)
+
                 # Push the deterministic strictly parsed QueryResponse JSON downstream securely
                 await websocket.send_json({
                     "status": "complete",
