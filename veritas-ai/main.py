@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from api.server import router as api_router
+from api.websockets import router as ws_router
 from config.settings import settings
 
 app = FastAPI(
@@ -19,6 +20,7 @@ app.add_middleware(
 )
 
 app.include_router(api_router)
+app.include_router(ws_router)
 
 if __name__ == "__main__":
     import uvicorn
