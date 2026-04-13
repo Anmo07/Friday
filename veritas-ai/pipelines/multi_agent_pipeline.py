@@ -9,6 +9,7 @@ from tools.truth_tools import truth_scoring_tool
 from tools.kg_tools import kg_build_tool, kg_validate_tool
 from core.firewall import HallucinationFirewall
 from core.alert_engine import AlertEngine
+from core.consensus_engine import ConsensusEngine
 from models.schemas import QueryResponse
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
@@ -121,9 +122,13 @@ async def misinformation_consumer_node():
         # Serialize logic bounds into QueryResponse schemas
         formatted_response = await asyncio.to_thread(_format_to_schema, query, str(result))
         
+        # Phase 15: Map natively structured Consensus Math Overrides resolving explicitly safely 
+        consensus_overrider = ConsensusEngine()
+        unified_consensus_response = consensus_overrider.evaluate(formatted_response)
+        
         # Enforce Hallucination Constraints Overrides explicitly globally
         firewall = HallucinationFirewall()
-        final_res = firewall.evaluate(formatted_response)
+        final_res = firewall.evaluate(unified_consensus_response)
         
         # Phase 14: Global Alert Engine Check overrides logically
         alert_engine = AlertEngine()
