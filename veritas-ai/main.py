@@ -3,11 +3,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.server import router as api_router
 from api.websockets import router as ws_router
 from config.settings import settings
+from contextlib import asynccontextmanager
+from pipelines.multi_agent_pipeline import deploy_event_consumers
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    deploy_event_consumers()
+    yield
 
 app = FastAPI(
     title=settings.APP_NAME,
     description="Real-time news intelligence and fake news detection API",
-    version="0.1.0"
+    version="0.1.0",
+    lifespan=lifespan
 )
 
 # Standard CORS configuration
