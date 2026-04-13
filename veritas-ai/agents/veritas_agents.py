@@ -47,3 +47,14 @@ class VeritasAgents:
             tools=tools,
             llm=self.llm
         )
+
+    def fake_news_agent(self, tools) -> Agent:
+        return Agent(
+            role='Misinformation Analyst',
+            goal='Analyze factual claims and report summaries for manipulative language, clickbait, and explicit fake news vectors.',
+            backstory='You are a psychological and linguistic expert. You scan texts for emotional manipulation, bias, and propaganda using advanced NLP transformer logic to assert mathematical falsehood probabilities.',
+            verbose=True,
+            allow_delegation=False,
+            tools=tools,
+            llm=self.llm
+        )

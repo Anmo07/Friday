@@ -3,6 +3,8 @@ from agents.veritas_agents import VeritasAgents
 from tools.web_scraper import web_scrape_tool
 from tools.news_api import news_search_tool
 from tools.rss_reader import rss_reader_tool
+from tools.verification_tools import domain_credibility_tool, rag_fact_check_tool
+from tools.nlp_tools import fake_news_detector_tool
 from models.schemas import QueryResponse
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
@@ -55,6 +57,9 @@ async def run_multi_agent_pipeline(query: str) -> QueryResponse:
     
     planner = agents.planner_agent()
     executor = agents.executor_agent(tools)
+    verifier = agents.verification_agent([domain_credibility_tool])
+    fact_checker = agents.fact_checking_agent([rag_fact_check_tool])
+    fake_news_analyzer = agents.fake_news_agent([fake_news_detector_tool])
     
     planning_task = Task(
         description=f"Analyze query: '{query}'. Create a step-by-step strategy to gather data.",
@@ -68,9 +73,27 @@ async def run_multi_agent_pipeline(query: str) -> QueryResponse:
         agent=executor
     )
     
+    verification_task = Task(
+        description="Take the raw report from the Data Executor. Extract all URLs and run them through the Domain Credibility Evaluator tool. Attach a credibility score and source type directly to each URL/Source in the report.",
+        expected_output="An updated intelligence report appending source credibility scores and typings to all domains.",
+        agent=verifier
+    )
+    
+    fact_check_task = Task(
+        description="Read the validated report. Identify any major claims. Run those claims through the RAG Fact Checker tool to find historical validation or contradictions inside our Vector database. Highlight any discrepancies found explicitly.",
+        expected_output="A finalized intelligence report verified against historical data, highlighting exact contradictions and mathematically supported facts.",
+        agent=fact_checker
+    )
+    
+    fake_news_task = Task(
+        description="Scan the entirely verified report. Run major claims or controversial headers through the Clickbait and Fake News Detector tool. Append a 'Fake Probability' scalar to the final narrative based on the NLP returned confidence.",
+        expected_output="The ultimate intelligence payload with embedded NLP verification probabilities identifying clickbait or propaganda.",
+        agent=fake_news_analyzer
+    )
+    
     crew = Crew(
-        agents=[planner, executor],
-        tasks=[planning_task, execution_task],
+        agents=[planner, executor, verifier, fact_checker, fake_news_analyzer],
+        tasks=[planning_task, execution_task, verification_task, fact_check_task, fake_news_task],
         process=Process.sequential,
         verbose=True
     )
