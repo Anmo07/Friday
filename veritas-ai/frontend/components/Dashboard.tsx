@@ -1,9 +1,9 @@
 "use client";
 import React, { useState } from "react";
-import { useWebSocket } from "../hooks/useWebSocket";
+import { useWebSocket } from "@/hooks/useWebSocket";
 import { TruthGauge } from "./TruthGauge";
 import { Loader2, AlertTriangle, ShieldCheck, Zap, ServerCrash } from "lucide-react";
-import { WS_BASE_URL } from "../services/api";
+import { WS_BASE_URL } from "@/services/api";
 
 export default function Dashboard() {
   const { streamData, alerts, activeStatus, sendQuery } = useWebSocket(WS_BASE_URL);
