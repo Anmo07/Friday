@@ -39,6 +39,7 @@ INTENT_PATTERNS = [
     (r"(?:create|make)\s+(?:a\s+)?(?:folder|directory)\s+(?:called\s+)?(.+)", "mkdir", lambda m: {"path": m.group(1).strip()}),
 
     # System settings
+    (r"(?:get|check|show|what is the)\s+volume", "get_volume", lambda m: {}),
     (r"(?:set|change)\s+volume\s+(?:to\s+)?(\d+)", "set_volume", lambda m: {"level": int(m.group(1))}),
     (r"(?:mute|silence)", "set_volume", lambda m: {"level": 0}),
     (r"(?:max|maximum)\s+volume", "set_volume", lambda m: {"level": 100}),
@@ -152,6 +153,8 @@ class AgentExecutor:
             return "No files found matching that query."
         elif action == "set_volume":
             return f"Volume set to {kwargs.get('level', '?')} percent."
+        elif action == "get_volume":
+            return f"The current volume is {result} percent."
         elif action == "lock_screen":
             return "Locking the screen now."
         elif action == "open_url":
