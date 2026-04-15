@@ -7,6 +7,7 @@ def web_scrape_tool(url: str) -> str:
     Scrapes the main text content from a provided URL using Playwright.
     Useful for reading article contents directly or extracting official statements.
     """
+    browser = None
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
@@ -21,9 +22,13 @@ def web_scrape_tool(url: str) -> str:
             else:
                 text = page.locator("body").inner_text()
                 
-            browser.close()
-            # Normalize and trim to prevent breaking LLM context windows (5k char slice is safe typically)
             cleaned_text = ' '.join(text.split())
             return cleaned_text[:5000] 
     except Exception as e:
         return f"Failed to scrape {url}. Error: {e}"
+    finally:
+        if browser is not None:
+            try:
+                browser.close()
+            except Exception:
+                pass

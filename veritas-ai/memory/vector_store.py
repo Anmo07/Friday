@@ -1,6 +1,8 @@
 import os
-from langchain_chroma import Chroma
-from langchain_ollama import OllamaEmbeddings
+
+from langchain_community.embeddings import OllamaEmbeddings
+from langchain_community.vectorstores import Chroma
+
 from config.settings import settings
 
 def get_embeddings() -> OllamaEmbeddings:

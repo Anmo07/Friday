@@ -2,6 +2,19 @@ from langchain.tools import tool
 import requests
 from config.settings import settings
 
+
+def _format_articles(articles: list) -> str:
+    results = []
+    for article in articles[:4]:
+        title = article.get("title") or "Untitled"
+        url = article.get("url") or ""
+        description = article.get("description") or "No description provided."
+        if not url:
+            continue
+        results.append(f"[{title}]({url}): {description}")
+    return " \n".join(results)
+
+
 @tool("News Search API")
 def news_search_tool(query: str) -> str:
     """
@@ -9,20 +22,26 @@ def news_search_tool(query: str) -> str:
     Returns article titles, descriptions, and source URLs. 
     Use this to identify events.
     """
-    if not settings.NEWS_API_KEY and not settings.GNEWS_API_KEY:
-        # Fallback simulation if you do not define .env files to preserve continuity natively
-        return f"Simulated actual NewsAPI results for '{query}'. " \
-               f"Article 1: Extensive coverage of {query} across networks [https://example.com/1]. " \
-               f"Article 2: Fact-checks debate the legitimacy of claims regarding {query} [https://example.com/2]."
-               
     if settings.GNEWS_API_KEY:
         try:
             url = f"https://gnews.io/api/v4/search?q={query}&lang=en&max=4&apikey={settings.GNEWS_API_KEY}"
             resp = requests.get(url, timeout=5)
+            resp.raise_for_status()
             data = resp.json()
-            results = " \n".join([f"[{a['title']}]({a['url']}): {a['description']}" for a in data.get('articles', [])])
+            results = _format_articles(data.get('articles', []))
             return results if results else f"No news found for {query}."
         except Exception as e:
-             return f"Error fetching news from GNews: {e}"
-    
-    return "API keys not fully mapped in request, returning empty search."
+            return f"Error fetching news from GNews: {e}"
+
+    if settings.NEWS_API_KEY:
+        try:
+            url = f"https://newsapi.org/v2/everything?q={query}&language=en&pageSize=4"
+            resp = requests.get(url, headers={"X-Api-Key": settings.NEWS_API_KEY}, timeout=5)
+            resp.raise_for_status()
+            data = resp.json()
+            results = _format_articles(data.get("articles", []))
+            return results if results else f"No news found for {query}."
+        except Exception as e:
+            return f"Error fetching news from NewsAPI: {e}"
+
+    return "No configured news providers are available for this environment."

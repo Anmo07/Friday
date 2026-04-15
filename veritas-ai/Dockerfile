@@ -1,6 +1,9 @@
 # Use Debian Bookworm for Playwright compatibility
 FROM python:3.9-slim-bookworm
 
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
 # System dependencies for audio, build tools, and Playwright browser deps
 RUN apt-get update && apt-get install -y \
     wget \
@@ -38,8 +41,7 @@ RUN pip install --upgrade pip
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
-# Install CrewAI (should resolve cleanly now)
-RUN pip install crewai==0.1.32
+RUN python -m playwright install chromium
 
 # Copy full application
 COPY . .

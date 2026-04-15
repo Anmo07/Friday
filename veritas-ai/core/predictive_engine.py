@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
-import logging
 from collections import Counter
+from threading import Lock
 
 class PredictiveIntelligenceEngine:
     """
@@ -9,6 +9,7 @@ class PredictiveIntelligenceEngine:
     """
     def __init__(self):
         self._payload_streams = []
+        self._lock = Lock()
 
     def ingest_payload(self, raw_query: str):
         """ Tracks temporal queries securely extracting structural context natively """
@@ -16,13 +17,13 @@ class PredictiveIntelligenceEngine:
         # (In prod, hooks into SpaCy or NLP pipelines globally)
         tokens = [word for word in raw_query.lower().split() if len(word) > 4]
         
-        for token in tokens[:3]: # Cap limits natively avoiding noise mapping
-            self._payload_streams.append({
-                "keyword_topic": token,
-                "timestamp": datetime.utcnow()
-            })
-            
-        self._flush_deprecated_telemetry()
+        with self._lock:
+            for token in tokens[:3]:
+                self._payload_streams.append({
+                    "keyword_topic": token,
+                    "timestamp": datetime.utcnow()
+                })
+            self._flush_deprecated_telemetry()
         
     def _flush_deprecated_telemetry(self):
         """ Maintains optimal Memory footprints implicitly mapping sliding windows correctly """
@@ -33,9 +34,10 @@ class PredictiveIntelligenceEngine:
         """ 
         Identifies mathematically sudden keyword spikes natively signaling astroturfed misinformation attacks.
         """
-        # Parse keyword frequencies strictly internally
-        topics = [item["keyword_topic"] for item in self._payload_streams]
-        frequency_matrix = Counter(topics)
+        with self._lock:
+            self._flush_deprecated_telemetry()
+            topics = [item["keyword_topic"] for item in self._payload_streams]
+            frequency_matrix = Counter(topics)
         
         alerts = []
         for topic_cluster, hit_count in frequency_matrix.items():
@@ -54,15 +56,6 @@ class PredictiveIntelligenceEngine:
                     "prediction": "anomalous narrative shift emerging structurally"
                 })
                 
-        # Inject mock data organically if memory arrays are structurally empty for structural testing dynamically
-        if not alerts:
-             alerts.append({
-                 "trend_alert": True,
-                 "topic": "global_election_integrity",
-                 "risk_level": "medium",
-                 "prediction": "Baseline anomaly prediction dynamically simulated securely."
-             })
-             
         return alerts
 
 # Global Singleton mapping persistent boundaries across the runtime limits natively

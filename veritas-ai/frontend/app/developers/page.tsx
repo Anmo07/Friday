@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { Code2, Key, Copy, CheckCircle, Lock, Zap, Globe, BarChart3 } from "lucide-react";
+import { API_BASE_URL } from "@/services/api";
 
 const endpoints = [
   {
@@ -26,7 +27,7 @@ const endpoints = [
   {
     method: "POST", path: "/api/v1/feedback", auth: false,
     desc: "Submit user feedback on a verification result to improve model accuracy.",
-    body: '{ "query": "...", "original_truth_score": 72, "user_flag": "incorrect" }',
+    body: '{ "query": "...", "original_truth_score": 0.72, "user_flag": "incorrect" }',
   },
 ];
 
@@ -38,10 +39,10 @@ const tiers = [
 
 export default function DevelopersPage() {
   const [copiedKey, setCopiedKey] = useState(false);
-  const testKey = "veritas_test_key_123";
+  const exampleKey = "YOUR_API_KEY";
 
   const copyKey = () => {
-    navigator.clipboard.writeText(testKey);
+    navigator.clipboard.writeText(exampleKey);
     setCopiedKey(true);
     setTimeout(() => setCopiedKey(false), 2000);
   };
@@ -59,12 +60,16 @@ export default function DevelopersPage() {
       {/* API Key Section */}
       <section className="glass rounded-2xl p-8 mb-10">
         <h2 className="text-lg font-bold text-white flex items-center gap-2 mb-4">
-          <Key className="w-5 h-5 text-yellow-400" /> Your API Key
+          <Key className="w-5 h-5 text-yellow-400" /> API Key Setup
         </h2>
-        <p className="text-gray-500 text-sm mb-4">Use this key in the <code className="text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded">X-API-KEY</code> header for authenticated endpoints.</p>
+        <p className="text-gray-500 text-sm mb-4">
+          Configure developer keys with <code className="text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded">VERITAS_DEV_API_KEY</code> or
+          <code className="text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded ml-1">VERITAS_ENTERPRISE_API_KEY</code> on the backend. Use the key in the
+          <code className="text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded ml-1">X-API-KEY</code> header for authenticated endpoints.
+        </p>
         <div className="flex items-center gap-3">
           <code className="flex-1 bg-black/40 border border-white/10 rounded-xl px-5 py-3 text-green-400 font-mono text-sm">
-            {testKey}
+            {exampleKey}
           </code>
           <button
             onClick={copyKey}
@@ -136,9 +141,9 @@ export default function DevelopersPage() {
           <Globe className="w-5 h-5 text-cyan-400" /> Quick Start
         </h2>
         <pre className="bg-black/40 rounded-xl p-6 text-sm text-gray-300 font-mono overflow-x-auto leading-relaxed">
-{`curl -X POST http://localhost:8000/api/v1/verify-news \\
+{`curl -X POST ${API_BASE_URL}/verify-news \\
   -H "Content-Type: application/json" \\
-  -H "X-API-KEY: ${testKey}" \\
+  -H "X-API-KEY: ${exampleKey}" \\
   -d '{"query": "Is climate change accelerating?"}'`}
         </pre>
       </section>

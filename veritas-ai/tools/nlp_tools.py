@@ -1,18 +1,28 @@
 from langchain.tools import tool
 import logging
 
-try:
-    from transformers import pipeline
-    # Initialize a lightweight transformer model trained for detecting Fake News properties via Text Classification
-    # To avoid VRAM exhaustion on local devices, we use a specialized smaller RoBERTa or BERT derivative 
-    # and lazily load it.
-    classifier = pipeline("text-classification", model="mrm8488/bert-tiny-finetuned-fake-news-detection")
-except ImportError:
-    classifier = None
-    logging.warning("NLP Transformers unavailable - pip install transformers torch missing.")
-except Exception as e:
-    classifier = None
-    logging.warning(f"Could not load Fake News NLP model: {e}")
+classifier = None
+classifier_load_attempted = False
+
+
+def _get_classifier():
+    global classifier
+    global classifier_load_attempted
+
+    if classifier_load_attempted:
+        return classifier
+
+    classifier_load_attempted = True
+    try:
+        from transformers import pipeline
+        classifier = pipeline("text-classification", model="mrm8488/bert-tiny-finetuned-fake-news-detection")
+    except ImportError:
+        logging.warning("NLP Transformers unavailable - pip install transformers torch missing.")
+        classifier = None
+    except Exception as e:
+        logging.warning(f"Could not load Fake News NLP model: {e}")
+        classifier = None
+    return classifier
 
 @tool("Clickbait and Fake News Detector")
 def fake_news_detector_tool(text: str) -> str:
@@ -20,13 +30,14 @@ def fake_news_detector_tool(text: str) -> str:
     Analyzes content for sensationalism, emotional manipulation, and propaganda vectors natively using NLP text classification.
     Returns the probability of the content being 'Fake' or 'Misleading'.
     """
-    if not classifier:
+    loaded_classifier = _get_classifier()
+    if not loaded_classifier:
         return "NLP Transformer not available on host machine. Assumed probability unknown."
         
     try:
         # Heavily truncate text to fit common 512 token limits to avoid tensor rank crashing
         truncated_text = text[:1500] 
-        results = classifier(truncated_text)
+        results = loaded_classifier(truncated_text)
         
         predictions = []
         for res in results:

@@ -37,6 +37,11 @@
 <body>
   <h2>Veritas AI</h2>
   <p>Highlight any text on the web, right-click, and select "Verify Truth" to instantly analyze claims natively.</p>
+  <label for="api-base-url" style="display:block; font-size:11px; color:#94a3b8; margin-bottom:6px;">Backend API base URL</label>
+  <input id="api-base-url" type="text" style="width:100%; box-sizing:border-box; padding:10px; border-radius:8px; border:1px solid rgba(148,163,184,0.2); background:#020617; color:#f8fafc; margin-bottom:10px;" />
+  <button id="save-config" style="width:100%; padding:10px; border:none; border-radius:8px; background:#2563eb; color:white; font-weight:600; cursor:pointer; margin-bottom:12px;">
+    Save Configuration
+  </button>
   <div id="connection-status" class="status">
     <div class="orb"></div>
     <span id="status-text">Backend Connected</span>

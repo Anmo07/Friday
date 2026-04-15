@@ -1,201 +1,291 @@
-from crewai import Task, Crew, Process
+import asyncio
+import logging
+import uuid
+from contextlib import suppress
+from datetime import datetime
+from typing import Dict, List
+
+from crewai import Crew, Process, Task
+
 from agents.veritas_agents import VeritasAgents
-from tools.web_scraper import web_scrape_tool
-from tools.news_api import news_search_tool
-from tools.rss_reader import rss_reader_tool
-from tools.verification_tools import domain_credibility_tool, rag_fact_check_tool
-from tools.nlp_tools import fake_news_detector_tool
-from tools.truth_tools import truth_scoring_tool
-from tools.kg_tools import kg_build_tool, kg_validate_tool
-from core.firewall import HallucinationFirewall
-from core.alert_engine import AlertEngine
+from config.settings import settings
+from core.alert_engine import AlertEngine, record_alerts
 from core.consensus_engine import ConsensusEngine
 from core.explainability_layer import ExplainabilityLayer
+from core.firewall import HallucinationFirewall
 from models.schemas import QueryResponse
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import PydanticOutputParser
-from models.llm import get_llm
-from datetime import datetime
 from pipelines.event_bus import event_bus
-import asyncio
-import uuid
-import logging
+from pipelines.response_builder import build_query_response
+from tools.kg_tools import kg_build_tool, kg_validate_tool
+from tools.news_api import news_search_tool
+from tools.nlp_tools import fake_news_detector_tool
+from tools.rss_reader import rss_reader_tool
+from tools.truth_tools import truth_scoring_tool
+from tools.verification_tools import domain_credibility_tool, rag_fact_check_tool
+from tools.web_scraper import web_scrape_tool
 
-def _format_to_schema(query: str, raw_text: str) -> QueryResponse:
-    llm = get_llm()
-    parser = PydanticOutputParser(pydantic_object=QueryResponse)
-    
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are the final formatter for Veritas AI. Convert the provided intelligence report "
-                   "into the strict JSON structure specified below. Do not hallucinate fields.\n\n{format_instructions}"),
-        ("human", "User Query: {query}\n\nIntelligence Report:\n{report}")
-    ]).partial(format_instructions=parser.get_format_instructions())
-    
-    chain = prompt | llm | parser
+
+class PipelineError(RuntimeError):
+    """Raised when a pipeline session cannot complete safely."""
+
+
+_consumer_tasks: List[asyncio.Task] = []
+_inflight_queries: Dict[str, asyncio.Future] = {}
+
+
+async def _run_crew(crew: Crew, timeout_seconds: int) -> str:
     try:
-        response = chain.invoke({"query": query, "report": raw_text})
-        response.timestamp = datetime.utcnow().isoformat() + "Z"
-        return response
-    except Exception as e:
-        print(f"Agent Formatting Error: {e}")
-        return QueryResponse(
-            query=query,
-            summary=f"Unstructured Output: {raw_text[:200]}...",
-            facts=[],
-            sources=[],
-            contradictions=[],
-            fake_probability=0.0,
-            confidence_score=0.0,
-            truth_score=0.0,
-            status="uncertain",
-            timestamp=datetime.utcnow().isoformat() + "Z"
+        return await asyncio.wait_for(
+            asyncio.to_thread(crew.kickoff),
+            timeout=timeout_seconds,
         )
+    except asyncio.TimeoutError as exc:
+        raise PipelineError("The agent pipeline timed out before it could complete.") from exc
+    except Exception as exc:
+        raise PipelineError(str(exc)) from exc
 
 
-# ====================================================================
-# CONSUMER NODES (PHASE 13 STREAMING REPLACEMENT)
-# ====================================================================
+def _fallback_response(query: str, message: str) -> QueryResponse:
+    return QueryResponse(
+        query=query,
+        summary=message,
+        facts=[],
+        sources=[],
+        contradictions=[],
+        fake_probability=0.5,
+        confidence_score=0.0,
+        truth_score=0.0,
+        status="uncertain",
+        timestamp=datetime.utcnow().isoformat() + "Z",
+    )
 
-async def verification_consumer_node():
-    """ Listens to the raw data stream autonomously and tightly executes the Verification Agent logic checks """
+
+async def verification_consumer_node() -> None:
     agents = VeritasAgents()
     verifier = agents.verification_agent([domain_credibility_tool])
-    
+
     async for event in event_bus.subscribe("verification_stream"):
         payload = event["payload"]
-        task = Task(
-            description=f"Take the raw report. Extract all URLs and run them through the Domain Credibility Evaluator tool. Attach a credibility score and source type directly to each URL/Source in the report.\n\nRAW REPORT:\n{payload['report']}",
-            expected_output="An updated report mapping mapping strictly domains.",
-            agent=verifier
-        )
-        crew = Crew(agents=[verifier], tasks=[task], verbose=True)
-        result = await asyncio.to_thread(crew.kickoff)
-        
-        await event_bus.publish("fact_check_stream", "DATA_VERIFIED", {
-            "session_id": payload["session_id"], "query": payload["query"], "report": str(result)
-        })
+        session_id = payload["session_id"]
+        try:
+            task = Task(
+                description=(
+                    "Take the raw report. Extract all URLs and run them through the Domain Credibility "
+                    "Evaluator tool. Attach a credibility score and source type directly to each URL/source "
+                    f"in the report.\n\nRAW REPORT:\n{payload['report']}"
+                ),
+                expected_output="An updated report with explicit source validation notes.",
+                agent=verifier,
+            )
+            crew = Crew(agents=[verifier], tasks=[task], verbose=False)
+            result = await _run_crew(crew, settings.AGENT_TASK_TIMEOUT_SECONDS)
+            await event_bus.publish(
+                "fact_check_stream",
+                "DATA_VERIFIED",
+                {
+                    "session_id": session_id,
+                    "query": payload["query"],
+                    "report": str(result),
+                },
+            )
+        except Exception as exc:
+            logging.exception("Verification stage failed for session %s", session_id)
+            await event_bus.fail_response(session_id, PipelineError(f"Verification stage failed: {exc}"))
 
-async def fact_checker_consumer_node():
-    """ Listens to the verified stream recursively, extracts explicit elements, and checks logic arrays """
+
+async def fact_checker_consumer_node() -> None:
     agents = VeritasAgents()
     fact_checker = agents.fact_checking_agent([rag_fact_check_tool, kg_build_tool, kg_validate_tool])
-    
+
     async for event in event_bus.subscribe("fact_check_stream"):
         payload = event["payload"]
-        task = Task(
-            description=f"Read the validated report. Extract key entities (Person, Organization, Event, Location) and bind their explicit relationships using the 'Knowledge Graph Entity Builder' tool. Then, run those entities through the 'Knowledge Graph Validator' tool as well as the 'RAG Fact Checker' tool to find historical validation or structural relationship contradictions explicitly. Highlight any graph discrepancies found.\n\nREPORT:\n{payload['report']}",
-            expected_output="A finalized intelligence report verified flawlessly against vectors and explicitly grouped structure graphs.",
-            agent=fact_checker
-        )
-        crew = Crew(agents=[fact_checker], tasks=[task], verbose=True)
-        result = await asyncio.to_thread(crew.kickoff)
-        
-        await event_bus.publish("misinformation_stream", "FACTS_CHECKED", {
-            "session_id": payload["session_id"], "query": payload["query"], "report": str(result)
-        })
+        session_id = payload["session_id"]
+        try:
+            task = Task(
+                description=(
+                    "Read the validated report. Extract key entities and relationships, bind them with the "
+                    "Knowledge Graph Entity Builder tool, validate them with the Knowledge Graph Validator, "
+                    "and cross-check major claims with the RAG Fact Checker.\n\n"
+                    f"REPORT:\n{payload['report']}"
+                ),
+                expected_output="A verified intelligence report with contradictions and evidence noted explicitly.",
+                agent=fact_checker,
+            )
+            crew = Crew(agents=[fact_checker], tasks=[task], verbose=False)
+            result = await _run_crew(crew, settings.AGENT_TASK_TIMEOUT_SECONDS)
+            await event_bus.publish(
+                "misinformation_stream",
+                "FACTS_CHECKED",
+                {
+                    "session_id": session_id,
+                    "query": payload["query"],
+                    "report": str(result),
+                },
+            )
+        except Exception as exc:
+            logging.exception("Fact checking stage failed for session %s", session_id)
+            await event_bus.fail_response(session_id, PipelineError(f"Fact-checking stage failed: {exc}"))
 
-async def misinformation_consumer_node():
-    """ Evaluates pure bias parameters passively and finalizes Truth engine outputs down the stream """
+
+async def misinformation_consumer_node() -> None:
     agents = VeritasAgents()
     fake_news_analyzer = agents.fake_news_agent([fake_news_detector_tool])
     critic = agents.critic_agent([truth_scoring_tool])
-    
+
     async for event in event_bus.subscribe("misinformation_stream"):
         payload = event["payload"]
         session_id = payload["session_id"]
         query = payload["query"]
-        
-        scan_task = Task(
-            description=f"Scan the entirely verified report. Run major claims or controversial headers through the Clickbait and Fake News Detector tool. Append a 'Fake Probability' scalar to the final narrative based on the NLP returned confidence.\n\nREPORT:\n{payload['report']}",
-            expected_output="The ultimate intelligence payload embedded with calculated bias probabilities.",
-            agent=fake_news_analyzer
-        )
-        
-        critic_task = Task(
-            description="Conduct a multi-pass validation loop over the entire narrative. Ensure facts don't contradict themselves based on Fact Checker validations. \nCRITICAL: Formulate the aggregated mathematical metrics mapping sources, anomalies, and claims into a strict JSON dictionary and explicitly execute the 'Truth Scoring Engine' tool. Append the tool's resulting 'truth_score' scalar explicitly into the final report payload alongside the bias probability computation.",
-            expected_output="An objectively mapped, structurally valid final intelligence report.",
-            agent=critic
-        )
-        
-        crew = Crew(agents=[fake_news_analyzer, critic], tasks=[scan_task, critic_task], process=Process.sequential, verbose=True)
-        result = await asyncio.to_thread(crew.kickoff)
-        
-        # Serialize logic bounds into QueryResponse schemas
-        formatted_response = await asyncio.to_thread(_format_to_schema, query, str(result))
-        
-        # Phase 15: Map natively structured Consensus Math Overrides resolving explicitly safely 
-        consensus_overrider = ConsensusEngine()
-        unified_consensus_response = consensus_overrider.evaluate(formatted_response)
-        
-        # Phase 16: Expand Explanation mapping securely over the natively merged array limits
-        explainer = ExplainabilityLayer()
-        explained_response = explainer.evaluate(unified_consensus_response)
-        
-        # Enforce Hallucination Constraints Overrides explicitly globally
-        firewall = HallucinationFirewall()
-        final_res = firewall.evaluate(explained_response)
-        
-        # Phase 14: Global Alert Engine Check overrides logically
-        alert_engine = AlertEngine()
-        triggered_alerts = alert_engine.evaluate(final_res)
-        for alert in triggered_alerts:
-            await event_bus.publish("global_alerts", "ALERT_TRIGGERED", alert)
-        
-        # Map response back down to the suspended Endpoint hook structurally 
-        if session_id in event_bus.response_futures:
-            event_bus.response_futures[session_id].set_result(final_res)
 
-# ====================================================================
-# ROOT PRODUCER INVOCATION (API / WebSocket ENTRY)
-# ====================================================================
+        try:
+            scan_task = Task(
+                description=(
+                    "Review the report for clickbait, emotional language, or misinformation indicators using "
+                    "the Clickbait and Fake News Detector tool.\n\n"
+                    f"REPORT:\n{payload['report']}"
+                ),
+                expected_output="A report annotated with any fake-news classifier output.",
+                agent=fake_news_analyzer,
+            )
+            critic_task = Task(
+                description=(
+                    "Review the report for contradictions and run the Truth Scoring Engine on any verifiable "
+                    "metrics you can extract. Do not invent sources or scores that are not grounded in the "
+                    "evidence provided."
+                ),
+                expected_output="A concise final report grounded only in validated evidence.",
+                agent=critic,
+            )
+
+            crew = Crew(
+                agents=[fake_news_analyzer, critic],
+                tasks=[scan_task, critic_task],
+                process=Process.sequential,
+                verbose=False,
+            )
+            result = await _run_crew(crew, settings.AGENT_TASK_TIMEOUT_SECONDS)
+            formatted_response = build_query_response(query, str(result))
+
+            consensus_overrider = ConsensusEngine()
+            unified_consensus_response = consensus_overrider.evaluate(formatted_response)
+
+            explainer = ExplainabilityLayer()
+            explained_response = explainer.evaluate(unified_consensus_response)
+
+            firewall = HallucinationFirewall()
+            final_response = firewall.evaluate(explained_response)
+
+            alert_engine = AlertEngine()
+            triggered_alerts = alert_engine.evaluate(final_response)
+            if triggered_alerts:
+                record_alerts(triggered_alerts)
+                for alert in triggered_alerts:
+                    await event_bus.publish("global_alerts", "ALERT_TRIGGERED", alert)
+
+            await event_bus.resolve_response(session_id, final_response)
+        except Exception as exc:
+            logging.exception("Final pipeline stage failed for session %s", session_id)
+            await event_bus.fail_response(session_id, PipelineError(f"Final validation stage failed: {exc}"))
+
 
 async def run_multi_agent_pipeline(query: str) -> QueryResponse:
-    """
-    Kicks off the topological event streams cleanly, serving as the Data Collector Producer.
-    Creates stateful suspensions exactly mapped safely to socket boundaries.
-    """
-    session_id = str(uuid.uuid4())
-    future = asyncio.Future()
-    event_bus.response_futures[session_id] = future
-    
-    agents = VeritasAgents()
-    tools = [news_search_tool, web_scrape_tool, rss_reader_tool]
-    
-    planner = agents.planner_agent()
-    executor = agents.executor_agent(tools)
-    
-    planning_task = Task(
-        description=f"Analyze query: '{query}'. Create a step-by-step strategy to gather data.",
-        expected_output="A perfectly formatted execution mapping list.",
-        agent=planner
-    )
-    
-    execution_task = Task(
-        description="Using the planner's strategy, execute available tools sequentially to collect data. Output the final aggregated evidence string.",
-        expected_output="A compiled intelligence payload containing unstructured facts and sources.",
-        agent=executor
-    )
-    
-    # Single Crew Execution wrapping purely the Producers natively
-    crew = Crew(agents=[planner, executor], tasks=[planning_task, execution_task], process=Process.sequential, verbose=True)
-    raw_result = await asyncio.to_thread(crew.kickoff)
-    
-    # Broadcast Output downstream synchronously pushing into asynchronous Message Queues
-    await event_bus.publish("verification_stream", "DATA_COLLECTED", {
-        "session_id": session_id,
-        "query": query,
-        "report": str(raw_result)
-    })
-    
-    # API endpoints safely await stream propagation limits 
-    finalized_response = await future
-    del event_bus.response_futures[session_id]
-    
-    return finalized_response
+    normalized_query = " ".join(query.strip().split())
+    if not normalized_query:
+        raise PipelineError("Query string cannot be empty.")
 
-def deploy_event_consumers():
-    """ Triggers background loops binding consumers tightly onto internal Stream layouts natively. """
-    asyncio.create_task(verification_consumer_node())
-    asyncio.create_task(fact_checker_consumer_node())
-    asyncio.create_task(misinformation_consumer_node())
-    logging.info("Event Streaming Message Broker loops natively engaged.")
+    existing_future = _inflight_queries.get(normalized_query.lower())
+    if existing_future is not None:
+        return await asyncio.shield(existing_future)
+
+    loop = asyncio.get_running_loop()
+    shared_future = loop.create_future()
+    _inflight_queries[normalized_query.lower()] = shared_future
+    session_id = str(uuid.uuid4())
+    response_future = loop.create_future()
+    event_bus.response_futures[session_id] = response_future
+
+    try:
+        agents = VeritasAgents()
+        tools = [news_search_tool, web_scrape_tool, rss_reader_tool]
+
+        planner = agents.planner_agent()
+        executor = agents.executor_agent(tools)
+
+        planning_task = Task(
+            description=f"Analyze query: '{normalized_query}'. Create a step-by-step strategy to gather evidence.",
+            expected_output="A compact, actionable execution plan.",
+            agent=planner,
+        )
+
+        execution_task = Task(
+            description=(
+                "Using the planner's strategy, execute the available tools sequentially to collect evidence. "
+                "Do not invent URLs, sources, or evidence that are not returned by the tools."
+            ),
+            expected_output="A compiled evidence report containing raw facts and source links.",
+            agent=executor,
+        )
+
+        crew = Crew(
+            agents=[planner, executor],
+            tasks=[planning_task, execution_task],
+            process=Process.sequential,
+            verbose=False,
+        )
+        raw_result = await _run_crew(crew, settings.AGENT_TASK_TIMEOUT_SECONDS)
+
+        await event_bus.publish(
+            "verification_stream",
+            "DATA_COLLECTED",
+            {
+                "session_id": session_id,
+                "query": normalized_query,
+                "report": str(raw_result),
+            },
+        )
+
+        finalized_response = await asyncio.wait_for(
+            asyncio.shield(response_future),
+            timeout=settings.PIPELINE_TIMEOUT_SECONDS,
+        )
+        shared_future.set_result(finalized_response)
+        return finalized_response
+    except asyncio.TimeoutError as exc:
+        message = "The verification pipeline exceeded its timeout budget."
+        fallback = _fallback_response(normalized_query, message)
+        if not shared_future.done():
+            shared_future.set_result(fallback)
+        return fallback
+    except Exception as exc:
+        logging.exception("Pipeline failed for query '%s'", normalized_query)
+        if not shared_future.done():
+            shared_future.set_exception(exc)
+        raise
+    finally:
+        event_bus.response_futures.pop(session_id, None)
+        _inflight_queries.pop(normalized_query.lower(), None)
+
+
+def deploy_event_consumers() -> List[asyncio.Task]:
+    global _consumer_tasks
+    if _consumer_tasks:
+        return _consumer_tasks
+
+    _consumer_tasks = [
+        asyncio.create_task(verification_consumer_node(), name="verification_consumer"),
+        asyncio.create_task(fact_checker_consumer_node(), name="fact_checker_consumer"),
+        asyncio.create_task(misinformation_consumer_node(), name="misinformation_consumer"),
+    ]
+    logging.info("Event streaming consumers engaged.")
+    return _consumer_tasks
+
+
+async def shutdown_event_consumers() -> None:
+    global _consumer_tasks
+    for task in _consumer_tasks:
+        task.cancel()
+    for task in _consumer_tasks:
+        with suppress(asyncio.CancelledError):
+            await task
+    _consumer_tasks = []
+    await event_bus.shutdown()

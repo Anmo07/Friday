@@ -11,25 +11,31 @@ export default function FeedbackPage() {
   const [comments, setComments] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string>("");
 
   const handleSubmit = async () => {
     if (!query || !userFlag) return;
     setSubmitting(true);
+    setError("");
     try {
-      await fetch(`${API_BASE_URL}/feedback`, {
+      const response = await fetch(`${API_BASE_URL}/feedback`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           query,
-          original_truth_score: parseFloat(originalScore) || 0,
+          original_truth_score: (parseFloat(originalScore) || 0) / 100,
           user_flag: userFlag,
-          user_corrected_score: correctedScore ? parseFloat(correctedScore) : null,
+          user_corrected_score: correctedScore ? parseFloat(correctedScore) / 100 : null,
           comments,
         }),
       });
+      if (!response.ok) {
+        throw new Error("Feedback submission failed.");
+      }
       setSubmitted(true);
     } catch (err) {
       console.error("Feedback submission failed:", err);
+      setError("Feedback submission failed. Please try again.");
     }
     setSubmitting(false);
   };
@@ -154,6 +160,7 @@ export default function FeedbackPage() {
         </div>
 
         {/* Submit */}
+        {error && <p className="text-sm text-red-400">{error}</p>}
         <button
           onClick={handleSubmit}
           disabled={!query || !userFlag || submitting}

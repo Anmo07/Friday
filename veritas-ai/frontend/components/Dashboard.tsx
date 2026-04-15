@@ -3,14 +3,20 @@ import React, { useState, useEffect, useRef } from "react";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { TruthGauge } from "./TruthGauge";
 import { Loader2, AlertTriangle, ShieldCheck, Zap, ServerCrash, Mic, MicOff, Volume2 } from "lucide-react";
-import { WS_BASE_URL } from "@/services/api";
+import { WS_BASE_URL, formatPercent } from "@/services/api";
+import { QueryResponse } from "@/types/api";
 
 export default function Dashboard() {
-  const { streamData, alerts, activeStatus, sendQuery } = useWebSocket(WS_BASE_URL);
+  const { streamData, alerts, activeStatus, error, sendQuery } = useWebSocket(WS_BASE_URL);
   const [query, setQuery] = useState("");
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
   const [lastSpokenSummary, setLastSpokenSummary] = useState<string>("");
+  const sendQueryRef = useRef(sendQuery);
+
+  useEffect(() => {
+    sendQueryRef.current = sendQuery;
+  }, [sendQuery]);
 
   useEffect(() => {
     // Inject SpeechRecognition securely 
@@ -33,10 +39,9 @@ export default function Dashboard() {
 
         recognitionRef.current.onend = () => {
           setIsListening(false);
-          // Only auto-trigger if we captured actual bounds organically
           setQuery((prev) => {
             if (prev.trim().length > 2) {
-              sendQuery(prev.trim());
+              sendQueryRef.current(prev.trim());
             }
             return prev;
           });
@@ -47,7 +52,7 @@ export default function Dashboard() {
         };
       }
     }
-  }, [sendQuery]);
+  }, []);
 
   const toggleVoice = () => {
     if (isListening) {
@@ -65,7 +70,8 @@ export default function Dashboard() {
     sendQuery(query);
   };
 
-  const payload = streamData.length > 0 ? streamData[0] : null;
+  const payload: QueryResponse | null = streamData.length > 0 ? streamData[0] : null;
+  const isProcessing = activeStatus === "transmitting" || activeStatus === "processing" || activeStatus.startsWith("Verifying");
 
   // Speak automatically when a new payload explicitly finalizes dynamically
   useEffect(() => {
@@ -109,10 +115,10 @@ export default function Dashboard() {
           />
           <button
             onClick={handleExecute}
-            disabled={activeStatus === "transmitting" || activeStatus.includes("Orchestrating")}
+            disabled={isProcessing}
             className="bg-primary hover:bg-blue-500 text-white px-8 py-4 rounded-xl font-semibold tracking-wide transition-all duration-300 shadow-[0_0_20px_rgba(59,130,246,0.4)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
-            {(activeStatus === "transmitting" || activeStatus.includes("Orchestrating")) ? (
+            {isProcessing ? (
               <><Loader2 className="animate-spin w-5 h-5" /> Parsing</>
             ) : (
               <><Zap className="w-5 h-5" /> Execute</>
@@ -121,10 +127,17 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {activeStatus.includes("Orchestrating") && !payload && (
+      {isProcessing && !payload && (
         <div className="w-full bg-blue-900/20 border border-blue-500/30 rounded-xl p-4 flex items-center gap-4 animate-pulse mt-4">
           <Loader2 className="animate-spin text-blue-400 w-6 h-6" />
-          <span className="text-blue-200 font-medium tracking-wide">Orchestrating autonomous logic streams... Please wait.</span>
+          <span className="text-blue-200 font-medium tracking-wide">{activeStatus === "transmitting" ? "Starting verification..." : activeStatus}</span>
+        </div>
+      )}
+
+      {error && (
+        <div className="w-full bg-red-950/30 border border-red-500/30 rounded-xl p-4 flex items-center gap-3">
+          <AlertTriangle className="w-5 h-5 text-red-400" />
+          <span className="text-red-200 text-sm">{error}</span>
         </div>
       )}
 
@@ -151,7 +164,7 @@ export default function Dashboard() {
         <div className="w-full grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
 
           <div className="bg-gray-900/40 border border-white/5 rounded-3xl p-8 flex flex-col items-center shadow-2xl backdrop-blur-3xl ring-1 ring-white/5 relative">
-            <TruthGauge score={payload.confidence_score !== undefined ? payload.confidence_score : 0.0} />
+            <TruthGauge score={payload.truth_score !== undefined ? payload.truth_score : 0.0} />
 
             <div className="mt-8 flex flex-col items-center gap-2 w-full">
               <div className={`px-6 py-2 rounded-full font-bold uppercase tracking-widest text-sm flex items-center gap-2 ${payload.status === 'verified' ? 'bg-green-500/20 text-green-400 border border-green-500/30' : payload.status === 'likely_false' ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'}`}>
@@ -175,6 +188,10 @@ export default function Dashboard() {
                   </div>
                 </div>
               )}
+
+              <div className="mt-5 text-xs text-gray-500 uppercase tracking-widest">
+                Confidence {formatPercent(payload.confidence_score)} • Bias {formatPercent(payload.fake_probability)}
+              </div>
             </div>
           </div>
 

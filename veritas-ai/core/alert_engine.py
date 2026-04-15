@@ -1,6 +1,21 @@
-from typing import Dict, List
+from collections import deque
 from datetime import datetime
+from typing import Dict, List
+
+from config.settings import settings
 from models.schemas import QueryResponse
+
+
+_recent_alerts: deque[Dict] = deque(maxlen=settings.ALERTS_MAX_ITEMS)
+
+
+def record_alerts(alerts: List[Dict]) -> None:
+    for alert in alerts:
+        _recent_alerts.appendleft(alert)
+
+
+def get_recent_alerts(limit: int = 20) -> List[Dict]:
+    return list(_recent_alerts)[:limit]
 
 class AlertEngine:
     """

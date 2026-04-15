@@ -2,6 +2,9 @@ from neo4j import GraphDatabase
 from config.settings import settings
 import logging
 
+ALLOWED_LABELS = {"Person", "Organization", "Event", "Location"}
+ALLOWED_RELATIONSHIPS = {"ANNOUNCED", "OCCURRED_AT", "AFFILIATED_WITH", "REPORTED_BY"}
+
 class KnowledgeGraph:
     """
     Manages the Entity-Relationship Knowledge Graph resolving explicit Truth bindings.
@@ -26,7 +29,11 @@ class KnowledgeGraph:
         Merges explicitly classified entity nodes cleanly.
         Constraints: Person, Organization, Event, Location
         """
-        if not self.driver: return
+        if not self.driver:
+            return
+        if label not in ALLOWED_LABELS:
+            logging.warning("Rejected unsupported Neo4j label: %s", label)
+            return
         query = f"MERGE (n:{label} {{name: $name}})"
         with self.driver.session() as session:
             try:
@@ -39,7 +46,16 @@ class KnowledgeGraph:
         Binds relationships rigidly to stop hallucination looping natively.
         Constraints: ANNOUNCED, OCCURRED_AT, AFFILIATED_WITH, REPORTED_BY
         """
-        if not self.driver: return
+        if not self.driver:
+            return
+        if subject_label not in ALLOWED_LABELS or obj_label not in ALLOWED_LABELS or rel not in ALLOWED_RELATIONSHIPS:
+            logging.warning(
+                "Rejected unsupported graph relationship: %s -[%s]-> %s",
+                subject_label,
+                rel,
+                obj_label,
+            )
+            return
         query = (
             f"MATCH (s:{subject_label} {{name: $subject}}) "
             f"MATCH (o:{obj_label} {{name: $obj}}) "
