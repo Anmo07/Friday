@@ -1,28 +1,45 @@
-# Using official Microsoft Playwright image to bypass manual browser downloads and avoid network drops
-FROM mcr.microsoft.com/playwright/python:v1.44.0-jammy
+# Use Debian Bookworm for Playwright compatibility
+FROM python:3.9-slim-bookworm
 
-# Install other system dependencies (audio, speech, build tools)
+# System dependencies for audio, build tools, and Playwright browser deps
 RUN apt-get update && apt-get install -y \
     wget \
     gnupg \
     build-essential \
+    libffi-dev \
+    libssl-dev \
     curl \
     libportaudio2 \
     portaudio19-dev \
     espeak-ng \
     ffmpeg \
+    # Playwright Chromium deps (Bookworm-compatible)
+    libnss3 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libxcomposite1 \
+    libxrandr2 \
+    libxdamage1 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libasound2 \
+    libgbm1 \
+    libgtk-3-0 \
+    libxshmfence1 \
+    fonts-liberation \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 RUN pip install --upgrade pip
 
-# Install main Python deps
+# Install main Python deps (with pip cache to speed up dependency resolution)
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install -r requirements.txt
 
-# Install CrewAI with dependencies (langchain-community is already in requirements.txt)
-RUN pip install --no-cache-dir crewai==0.1.32
+# Install CrewAI (should resolve cleanly now)
+RUN pip install crewai==0.1.32
 
 # Copy full application
 COPY . .
