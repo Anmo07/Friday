@@ -1,3 +1,0 @@
-[2026-04-15T04:02:44.470317Z] ACTION=NORMAL CMD="get volume" DECISION=ALLOWED REASON=Standard execution.
-[2026-04-15T04:05:37.307029Z] ACTION=NORMAL CMD="Hey ! How are you ?" DECISION=ALLOWED REASON=Standard execution.
-[2026-04-15T04:06:04.999151Z] ACTION=NORMAL CMD="CAn';t you understand basic english ?" DECISION=ALLOWED REASON=Standard execution.
