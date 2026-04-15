@@ -15,7 +15,8 @@ The central nervous system that wires together:
 Supports Voice, Text, and API input modes simultaneously.
 
 Usage:
-  python -m system.friday_orchestrator
+  python3 -m system.friday_orchestrator
+  python3 -m system.friday_orchestrator --text-only
 """
 
 import asyncio
@@ -24,6 +25,7 @@ import time
 import logging
 import sys
 import os
+import subprocess
 
 # Ensure project root is on path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -49,6 +51,26 @@ WAKE_WORD = "friday"
 GREETING = "Friday online. How can I help you?"
 FAREWELL = "Going silent. Double-clap or say Friday to wake me."
 CONFIRM_PROMPT = "That requires elevated permissions. Should I proceed? Say yes or no."
+
+
+def _speak_blocking(text: str, voice: str = "Samantha", rate: int = 190):
+    """
+    Reliable blocking TTS using macOS `say` command directly.
+    Waits until speech finishes before returning.
+    """
+    if not text.strip():
+        return
+    try:
+        subprocess.run(
+            ["say", "-v", voice, "-r", str(rate), text],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=30,
+        )
+    except Exception as e:
+        logger.error(f"TTS failed: {e}")
+        # Print to console as fallback
+        print(f"  🔊 {text}")
 
 
 class FridayOrchestrator:
@@ -101,7 +123,7 @@ class FridayOrchestrator:
         if self.audio_engine:
             self.audio_engine.start()
 
-        self.tts.speak(GREETING)
+        _speak_blocking(GREETING)
 
         # If text mode is enabled, run the text REPL in the main thread
         if self.enable_text:
@@ -122,8 +144,7 @@ class FridayOrchestrator:
         if self.audio_engine:
             self.audio_engine.stop()
         self.daemon.stop()
-        self.tts.speak("Friday shutting down. Goodbye.")
-        time.sleep(2)
+        _speak_blocking("Friday shutting down. Goodbye.")
         logger.info("Friday stopped.")
 
     # -------------------------------------------------------------------
@@ -141,8 +162,8 @@ class FridayOrchestrator:
         self._active_session = True
         logger.info(f"Activation via [{trigger_source}]")
 
-        self.tts.speak("Yes?")
-        time.sleep(0.8)
+        _speak_blocking("Yes?")
+        time.sleep(0.3)
 
         # Capture the voice command
         text = self.capture.capture_and_transcribe()
@@ -150,7 +171,7 @@ class FridayOrchestrator:
         if text:
             self._process_input(text, source="voice")
         else:
-            self.tts.speak("I didn't catch that. Try again.")
+            _speak_blocking("I didn't catch that. Try again.")
 
         self._active_session = False
 
@@ -168,57 +189,38 @@ class FridayOrchestrator:
         # Check for exit commands
         lower = text.lower().strip()
         if lower in ("exit", "quit", "stop", "goodbye", "bye"):
-            self.tts.speak(FAREWELL)
+            _speak_blocking(FAREWELL)
             self._running = False
             return
 
         # Check for workflow match first (Phase 44)
         wf = workflow_engine.find_workflow(text)
         if wf:
-            self.tts.speak(f"Starting workflow: {wf.name}")
-            time.sleep(0.5)
+            _speak_blocking(f"Starting workflow: {wf.name}")
 
             def on_step(current, total, desc):
-                self.tts.speak(f"Step {current} of {total}: {desc}")
+                print(f"  ⚙️  Step {current}/{total}: {desc}")
 
             result = workflow_engine.execute_workflow(wf, on_step=on_step)
             summary = f"Workflow {wf.name} {result['status']}."
-            self.tts.speak(summary)
+            _speak_blocking(summary)
             self.session.add_turn("assistant", summary)
             log_command(text, f"workflow:{wf.name}", {}, result["status"], summary)
             return
 
-        # Standard single-command processing (Phase 39)
+        # Standard command processing via 3-tier agent (Phase 39)
         response = self.agent.process_command(text)
 
         action = response.get("action", "")
         status = response.get("status", "unknown")
         speech = response.get("speech_response", "Done.")
 
-        # Elevation check for shell commands
-        if status == "no_match":
-            # Attempt to interpret as a direct shell command
-            validation = validate_command(text)
-            if validation.get("needs_confirmation"):
-                self.tts.speak(CONFIRM_PROMPT)
-                time.sleep(1.5)
+        # Print the response to the terminal
+        print(f"  🤖 {speech}")
 
-                # Listen for confirmation
-                if source == "voice":
-                    confirm_text = self.capture.capture_and_transcribe()
-                else:
-                    confirm_text = input("Confirm (yes/no): ")
+        # Speak the response
+        _speak_blocking(speech)
 
-                if confirm_text and "yes" in confirm_text.lower():
-                    from system.control_engine import run_shell_command
-                    result = run_shell_command(text)
-                    speech = f"Command executed. Exit code: {result.get('exit_code', '?')}"
-                    status = result.get("status", "error")
-                else:
-                    speech = "Cancelled."
-                    status = "cancelled"
-
-        self.tts.speak(speech)
         self.session.add_turn("assistant", speech)
 
         # Log to persistent memory (Phase 40)
@@ -236,10 +238,12 @@ class FridayOrchestrator:
 
     def _text_repl(self):
         """Interactive text-based command loop."""
-        print("\n" + "=" * 50)
+        print()
+        print("=" * 55)
         print("  FRIDAY — Text Mode Active")
         print("  Type commands or say 'exit' to quit.")
-        print("=" * 50 + "\n")
+        print("=" * 55)
+        print()
 
         try:
             while self._running:
@@ -267,8 +271,7 @@ async def friday_ws_handler(websocket):
     Phase 42 bridge: accepts commands from the Electron/Tauri UI overlay
     via WebSocket and returns structured responses.
     """
-    orchestrator = FridayOrchestrator(enable_voice=False, enable_text=False)
-    agent = orchestrator.agent
+    agent = AgentExecutor()
 
     async for message in websocket:
         import json
@@ -282,7 +285,6 @@ async def friday_ws_handler(websocket):
             await websocket.send(json.dumps({"error": "Empty command"}))
             continue
 
-        # Process through the agent
         response = agent.process_command(text)
 
         await websocket.send(json.dumps({
