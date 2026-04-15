@@ -1,0 +1,36 @@
+# Byte-compiled / optimized / compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+.venv/
+
+# Build and dependency directories (for Python)
+build/
+dist/
+
+# Frontend build artifacts and node modules
+/frontend/node_modules/
+/frontend/.next/
+/frontend/dist/
+
+# Local IDE/Editor cache files
+.idea/
+.vscode/
+
+# Docker and containerization
+.dockerignore
+.env
+.DS_Store
+
+# Database/Cache files
+*.db
+*.sqlite
+
+# Testing caches
+.pytest_cache/
+.ipynb_checkpoints/
