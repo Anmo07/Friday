@@ -21,8 +21,8 @@ RUN pip install --upgrade pip
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install CrewAI separately with --no-deps (avoids langchain version conflict)
-RUN pip install --no-cache-dir --no-deps crewai==0.1.32
+# Install CrewAI with dependencies (langchain-community is already in requirements.txt)
+RUN pip install --no-cache-dir crewai==0.1.32
 
 # Copy full application
 COPY . .
