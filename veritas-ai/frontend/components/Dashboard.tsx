@@ -23,21 +23,27 @@ export default function Dashboard() {
     if (typeof window !== "undefined") {
       // @ts-ignore
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (SpeechRecognition) {
+      if (SpeechRecognition && !recognitionRef.current) {
         recognitionRef.current = new SpeechRecognition();
-        recognitionRef.current.continuous = false;
+        recognitionRef.current.continuous = true;
         recognitionRef.current.interimResults = true;
         recognitionRef.current.lang = 'en-US';
 
+        recognitionRef.current.onstart = () => {
+          console.log("🎤 Speech recognition started");
+        };
+
         recognitionRef.current.onresult = (event: any) => {
-          let currentTranscript = '';
-          for (let i = event.resultIndex; i < event.results.length; ++i) {
-            currentTranscript += event.results[i][0].transcript;
+          console.log("🎤 Speech recognition result received", event);
+          let fullTranscript = '';
+          for (let i = 0; i < event.results.length; ++i) {
+            fullTranscript += event.results[i][0].transcript;
           }
-          setQuery(currentTranscript);
+          setQuery(fullTranscript);
         };
 
         recognitionRef.current.onend = () => {
+          console.log("🎤 Speech recognition ended");
           setIsListening(false);
           setQuery((prev) => {
             if (prev.trim().length > 2) {
@@ -47,7 +53,8 @@ export default function Dashboard() {
           });
         };
 
-        recognitionRef.current.onerror = () => {
+        recognitionRef.current.onerror = (event: any) => {
+          console.error("🎤 Speech recognition error", event.error);
           setIsListening(false);
         };
       }
@@ -56,12 +63,21 @@ export default function Dashboard() {
 
   const toggleVoice = () => {
     if (isListening) {
-      recognitionRef.current?.stop();
+      try {
+        recognitionRef.current?.stop();
+      } catch (e) {
+        console.error("Error stopping recognition", e);
+      }
       setIsListening(false);
     } else {
       setQuery("");
-      recognitionRef.current?.start();
-      setIsListening(true);
+      try {
+        recognitionRef.current?.start();
+        setIsListening(true);
+      } catch (e) {
+        console.error("Error starting recognition", e);
+        setIsListening(false);
+      }
     }
   };
 
