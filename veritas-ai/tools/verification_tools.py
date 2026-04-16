@@ -1,6 +1,6 @@
 from langchain.tools import tool
 from urllib.parse import urlparse
-from pipelines.retrieval_pipeline import retrieve_relevant_context_with_scores
+from pipelines.retrieval_pipeline import retrieve_relevant_context_async
 
 @tool("Domain Credibility Evaluator")
 def domain_credibility_tool(url: str) -> str:
@@ -33,19 +33,19 @@ def domain_credibility_tool(url: str) -> str:
         return f"Error evaluating URL {url}: {e}"
 
 @tool("RAG Fact Checker")
-def rag_fact_check_tool(claim: str) -> str:
+async def rag_fact_check_tool(claim: str) -> str:
     """
     Checks a specific factual claim against the internal Vector Database (RAG).
     Returns factual contradictions or supportive contexts based on embedded history.
     """
-    # Fetch top 3 closest historical claims from our Chroma local DB
-    results = retrieve_relevant_context_with_scores(claim, top_k=3)
+    # Phase 10: Non-blocking async retrieval
+    results = await retrieve_relevant_context_async(claim, top_k=3)
     if not results:
         return f"No prior historical context found in vector DB regarding claim: '{claim}'"
         
     compiled_evidence = []
-    for doc, score in results:
-        # Distance mapping: Usually < 1.0 indicates high relevance in normalized distances
-        compiled_evidence.append(f"[Distance: {score:.2f}]: {doc.page_content}")
+    for doc in results:
+        score = doc.metadata.get("score", 0.0)
+        compiled_evidence.append(f"[Relevance: {score:.2f}]: {doc.page_content}")
         
     return " \n".join(compiled_evidence)

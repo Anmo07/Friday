@@ -26,7 +26,7 @@ from tools.news_api import news_search_tool
 from tools.nlp_tools import fake_news_detector_tool
 from tools.rss_reader import rss_reader_tool
 from tools.truth_tools import truth_scoring_tool
-from tools.verification_tools import domain_credibility_tool
+from tools.verification_tools import domain_credibility_tool, rag_fact_check_tool
 from tools.web_scraper import web_scrape_tool
 
 
@@ -146,9 +146,15 @@ async def run_multi_agent_pipeline(
         else:
             # Phase 6: Optimized RAG call (embedded in validation tools)
             # Phase 8: Unified Validation Agent call
-            tools = [domain_credibility_tool, fake_news_detector_tool]
-            # Internal Fact Checker uses RAG internally via the tool
+            tools = [
+                domain_credibility_tool, 
+                fake_news_detector_tool,
+                rag_fact_check_tool,
+                kg_validate_tool
+            ]
+            # Internal Fact Checker uses RAG and KG internally via tools
             validator = agents.unified_validation_agent(tools)
+
             
             task = Task(
                 description=f"Perform truth assessment on the following report:\n{ctx.raw_report}",

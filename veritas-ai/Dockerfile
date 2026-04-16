@@ -1,12 +1,11 @@
-# Use Debian Bookworm for Playwright compatibility
-FROM python:3.9-slim-bookworm AS builder
+# --- BUILD STAGE ---
+FROM python:3.11-slim-bookworm AS builder
 
 ENV PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
 
 RUN apt-get update && apt-get install -y \
-    wget \
-    gnupg \
     build-essential \
     libffi-dev \
     libssl-dev \
@@ -15,26 +14,21 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-RUN pip install --upgrade pip
-
 COPY requirements.txt .
-RUN pip install --user -r requirements.txt
+RUN pip install --user --upgrade pip && \
+    pip install --user -r requirements.txt
 
-
-FROM python:3.9-slim-bookworm
+# --- FINAL STAGE ---
+FROM python:3.11-slim-bookworm
 
 ENV PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    PATH=/root/.local/bin:$PATH
 
-# System dependencies for audio, build tools, and Playwright browser deps
+# System dependencies for audio, chromium, and ffmpeg
 RUN apt-get update && apt-get install -y \
-    wget \
-    gnupg \
     curl \
     libportaudio2 \
-    portaudio19-dev \
-    espeak-ng \
     ffmpeg \
     libnss3 \
     libatk1.0-0 \
@@ -49,26 +43,26 @@ RUN apt-get update && apt-get install -y \
     libgbm1 \
     libgtk-3-0 \
     libxshmfence1 \
-    fonts-liberation \
     && rm -rf /var/lib/apt/lists/*
-
-# Copy Python packages from builder
-COPY --from=builder /root/.local /root/.local
-ENV PATH=/root/.local/bin:$PATH
 
 WORKDIR /app
 
-RUN python -m playwright install chromium
+# Copy installed packages from builder
+COPY --from=builder /root/.local /root/.local
 
+# Install Playwright browser
+RUN playwright install --with-deps chromium
+
+# Copy application source
 COPY . .
 
-RUN mkdir -p /app/data
+# Create persistent storage mount points
+RUN mkdir -p /app/data /app/chroma_db /app/logs
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8000/api/v1/health || exit 1
 
-# Preload models at startup and run server
-CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:11434/api/tags', timeout=5)" 2>/dev/null || echo "Ollama not ready, continuing..." && \
-    uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4 --limit-concurrency 100
+# Production server execution using uvicorn workers
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--limit-concurrency", "200"]
