@@ -16,9 +16,16 @@ services:
       - NEO4J_PASSWORD=veritas_secure
       - OLLAMA_BASE_URL=http://ollama:11434
       - MODEL_NAME=phi3
+      - FAST_MODEL=mistral
+      - ROUTER_MODEL=phi3
+      - RETRIEVAL_K=3
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
       - CHROMA_PERSIST_DIRECTORY=/app/chroma_db
       - PUBLIC_API_BASE_URL=http://localhost:8001/api/v1
       - PUBLIC_WS_BASE_URL=ws://localhost:8001/ws/stream
+      - PIPELINE_TIMEOUT_SECONDS=120
+      - AGENT_TASK_TIMEOUT_SECONDS=60
     depends_on:
       neo4j-db:
         condition: service_healthy
@@ -36,7 +43,7 @@ services:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
       interval: 30s
       timeout: 5s
-      start_period: 15s
+      start_period: 30s
       retries: 3
 
   # =============================================
@@ -102,7 +109,7 @@ services:
     image: redis:7-alpine
     container_name: veritas-redis
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
     ports:
       - "6379:6379"
     volumes:
@@ -125,6 +132,8 @@ services:
       - ollama_data:/root/.ollama
     networks:
       - veritas-network
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
 
 networks:
   veritas-network:

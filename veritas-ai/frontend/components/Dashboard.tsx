@@ -1,15 +1,29 @@
 "use client";
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { TruthGauge } from "./TruthGauge";
-import { Loader2, AlertTriangle, ShieldCheck, Zap, ServerCrash, Mic, MicOff, Volume2 } from "lucide-react";
+import { Loader2, AlertTriangle, ShieldCheck, Zap, ServerCrash, Mic, MicOff, Volume2, CheckCircle2, Clock, Brain, Search, Shield, FileSearch, MessageSquareWarning } from "lucide-react";
 import { WS_BASE_URL, formatPercent } from "@/services/api";
 import { QueryResponse } from "@/types/api";
+
+const PROGRESS_STAGES = [
+  { key: "cache_check", label: "Checking cache...", icon: Clock },
+  { key: "routing", label: "Analyzing query...", icon: Brain },
+  { key: "data_collection", label: "Collecting data...", icon: Search },
+  { key: "parallel_agents", label: "Running parallel analysis...", icon: Zap },
+  { key: "verification", label: "Verifying sources...", icon: Shield },
+  { key: "fact_check", label: "Cross-referencing facts...", icon: CheckCircle2 },
+  { key: "misinformation", label: "Detecting misinformation...", icon: MessageSquareWarning },
+  { key: "scoring", label: "Computing truth score...", icon: FileSearch },
+  { key: "finalizing", label: "Finalizing response...", icon: Loader2 },
+];
 
 export default function Dashboard() {
   const { streamData, alerts, activeStatus, error, sendQuery } = useWebSocket(WS_BASE_URL);
   const [query, setQuery] = useState("");
   const [isListening, setIsListening] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [currentStage, setCurrentStage] = useState<string>("");
   const recognitionRef = useRef<any>(null);
   const [lastSpokenSummary, setLastSpokenSummary] = useState<string>("");
   const sendQueryRef = useRef(sendQuery);
@@ -19,7 +33,6 @@ export default function Dashboard() {
   }, [sendQuery]);
 
   useEffect(() => {
-    // Inject SpeechRecognition securely 
     if (typeof window !== "undefined") {
       // @ts-ignore
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -30,11 +43,10 @@ export default function Dashboard() {
         recognitionRef.current.lang = 'en-US';
 
         recognitionRef.current.onstart = () => {
-          console.log("🎤 Speech recognition started");
+          console.log("Speech recognition started");
         };
 
         recognitionRef.current.onresult = (event: any) => {
-          console.log("🎤 Speech recognition result received", event);
           let fullTranscript = '';
           for (let i = 0; i < event.results.length; ++i) {
             fullTranscript += event.results[i][0].transcript;
@@ -43,7 +55,6 @@ export default function Dashboard() {
         };
 
         recognitionRef.current.onend = () => {
-          console.log("🎤 Speech recognition ended");
           setIsListening(false);
           setQuery((prev) => {
             if (prev.trim().length > 2) {
@@ -54,7 +65,7 @@ export default function Dashboard() {
         };
 
         recognitionRef.current.onerror = (event: any) => {
-          console.error("🎤 Speech recognition error", event.error);
+          console.error("Speech recognition error", event.error);
           setIsListening(false);
         };
       }
@@ -81,15 +92,16 @@ export default function Dashboard() {
     }
   };
 
-  const handleExecute = () => {
+  const handleExecute = useCallback(() => {
     if (!query.trim()) return;
+    setProgress(0);
+    setCurrentStage("");
     sendQuery(query);
-  };
+  }, [query, sendQuery]);
 
   const payload: QueryResponse | null = streamData.length > 0 ? streamData[0] : null;
   const isProcessing = activeStatus === "transmitting" || activeStatus === "processing" || activeStatus.startsWith("Verifying");
 
-  // Speak automatically when a new payload explicitly finalizes dynamically
   useEffect(() => {
     if (payload && payload.summary && payload.summary !== lastSpokenSummary) {
       if (typeof window !== "undefined" && 'speechSynthesis' in window) {
@@ -98,7 +110,6 @@ export default function Dashboard() {
         utterance.rate = 1.0;
         utterance.pitch = 1.0;
 
-        // Find Siri/Google equivalents organically if possible
         const voices = window.speechSynthesis.getVoices();
         const idealVoice = voices.find(v => v.name.includes("Samantha") || v.name.includes("Google") || v.name.includes("Siri") || v.name.includes("Alex"));
         if (idealVoice) utterance.voice = idealVoice;
@@ -109,10 +120,12 @@ export default function Dashboard() {
     }
   }, [payload, lastSpokenSummary]);
 
+  const currentStageInfo = PROGRESS_STAGES.find(s => s.key === currentStage);
+  const CurrentStageIcon = currentStageInfo?.icon || Loader2;
+
   return (
     <div className="w-full flex flex-col gap-6 relative pb-20">
 
-      {/* Search Input Mapping Bounds */}
       <div className="w-full relative shadow-[0_0_30px_rgba(59,130,246,0.15)] rounded-2xl overflow-hidden ring-1 ring-white/10 glass">
         <div className="bg-gray-900/60 backdrop-blur-xl p-6 flex flex-row items-center gap-4 border border-white/5">
           <button
@@ -135,7 +148,7 @@ export default function Dashboard() {
             className="bg-primary hover:bg-blue-500 text-white px-8 py-4 rounded-xl font-semibold tracking-wide transition-all duration-300 shadow-[0_0_20px_rgba(59,130,246,0.4)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {isProcessing ? (
-              <><Loader2 className="animate-spin w-5 h-5" /> Parsing</>
+              <><Loader2 className="animate-spin w-5 h-5" /> Analyzing</>
             ) : (
               <><Zap className="w-5 h-5" /> Execute</>
             )}
@@ -144,9 +157,49 @@ export default function Dashboard() {
       </div>
 
       {isProcessing && !payload && (
-        <div className="w-full bg-blue-900/20 border border-blue-500/30 rounded-xl p-4 flex items-center gap-4 animate-pulse mt-4">
-          <Loader2 className="animate-spin text-blue-400 w-6 h-6" />
-          <span className="text-blue-200 font-medium tracking-wide">{activeStatus === "transmitting" ? "Starting verification..." : activeStatus}</span>
+        <div className="w-full bg-blue-900/20 border border-blue-500/30 rounded-xl p-6 mt-4">
+          <div className="flex items-center gap-4 mb-4">
+            <CurrentStageIcon className={`w-6 h-6 text-blue-400 ${currentStageInfo?.key === "parallel_agents" ? "animate-pulse" : ""}`} />
+            <span className="text-blue-200 font-medium tracking-wide">
+              {activeStatus === "transmitting" ? "Starting analysis..." : activeStatus}
+            </span>
+          </div>
+          
+          <div className="w-full bg-gray-800 rounded-full h-2 overflow-hidden">
+            <div 
+              className="h-full bg-gradient-to-r from-blue-500 to-blue-400 transition-all duration-500 ease-out"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          
+          <div className="flex justify-between mt-2 text-xs text-gray-500">
+            <span>0%</span>
+            <span className="text-blue-400">{progress}%</span>
+            <span>100%</span>
+          </div>
+          
+          <div className="mt-4 flex flex-wrap gap-2">
+            {PROGRESS_STAGES.map((stage, idx) => {
+              const isComplete = progress > (idx * 100 / PROGRESS_STAGES.length);
+              const isActive = currentStage === stage.key;
+              const StageIcon = stage.icon;
+              return (
+                <div 
+                  key={stage.key}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs transition-all ${
+                    isComplete 
+                      ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
+                      : isActive 
+                        ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30 animate-pulse'
+                        : 'bg-gray-800/50 text-gray-500 border border-gray-700/30'
+                  }`}
+                >
+                  <StageIcon className="w-3 h-3" />
+                  <span>{stage.label}</span>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 

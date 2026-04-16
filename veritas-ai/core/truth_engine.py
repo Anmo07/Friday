@@ -95,13 +95,18 @@ class TruthEngine:
             bias_score * self.weights["bias_deviation"]
         )
 
+        breakdown = {
+            "source_authority": round(auth_score, 3),
+            "cross_source_agreement": round(agreement_score, 3),
+            "temporal_consistency": round(temporal_score, 3),
+            "claim_verifiability": round(verifiability_score, 3),
+            "bias_deviation": round(bias_score, 3)
+        }
+
+        from core.observability import observability
+        observability.log_truth_score(round(final_score, 3), breakdown)
+
         return {
             "truth_score": round(final_score, 3),
-            "breakdown": {
-                "source_authority": round(auth_score, 3),
-                "cross_source_agreement": round(agreement_score, 3),
-                "temporal_consistency": round(temporal_score, 3),
-                "claim_verifiability": round(verifiability_score, 3),
-                "bias_deviation": round(bias_score, 3)
-            }
+            "breakdown": breakdown
         }
