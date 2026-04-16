@@ -1,14 +1,12 @@
 import asyncio
 import hashlib
-import json
 import logging
 import uuid
-from contextlib import suppress
 from datetime import datetime
-from typing import Dict, List, Optional, Callable, Any, Tuple
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 from dataclasses import dataclass, field
 
-from crewai import Crew, Process, Task
+from crewai import Crew, Task
 
 from agents.veritas_agents import VeritasAgents
 from config.settings import settings
@@ -16,12 +14,11 @@ from core.alert_engine import AlertEngine, record_alerts
 from core.consensus_engine import ConsensusEngine
 from core.explainability_layer import ExplainabilityLayer
 from core.firewall import HallucinationFirewall
-from core.redis_cache import redis_cache, vector_cache
+from core.redis_cache import redis_cache
 from models.schemas import QueryResponse
 from pipelines.event_bus import event_bus
 from pipelines.response_builder import build_query_response
-from pipelines.retrieval_pipeline import retrieve_relevant_context_async
-from tools.kg_tools import kg_build_tool, kg_validate_tool
+from tools.kg_tools import kg_validate_tool
 from tools.news_api import news_search_tool
 from tools.nlp_tools import fake_news_detector_tool
 from tools.rss_reader import rss_reader_tool
@@ -43,11 +40,12 @@ class PipelineContext:
     fact_check_result: Optional[str] = None
     misinformation_result: Optional[str] = None
     errors: List[str] = field(default_factory=list)
-    progress_callback: Optional[Callable[[str, str], None]] = None
+    progress_callback: Optional[Callable[[str, str], Awaitable[None]]] = None
 
 
 _consumer_tasks: List[asyncio.Task] = []
 _inflight_queries: Dict[str, asyncio.Future] = {}
+_validation_agent_semaphore = asyncio.Semaphore(max(1, settings.MAX_PARALLEL_TOOLS))
 
 
 
@@ -85,8 +83,124 @@ async def _set_agent_cache(key: str, value: str, ttl: int = 1800):
     except Exception: pass
 
 
+def _hash_payload(payload: str) -> str:
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+async def _emit_progress(
+    progress_callback: Optional[Callable[[str, str], Awaitable[None]]],
+    stage: str,
+    message: str,
+) -> None:
+    if progress_callback:
+        await progress_callback(stage, message)
+
+
+async def _run_validation_agent(
+    *,
+    agent_name: str,
+    stage: str,
+    report: str,
+    agent_builder: Callable[[List[Any]], Any],
+    tools: List[Any],
+    task_description: str,
+    expected_output: str,
+    progress_callback: Optional[Callable[[str, str], Awaitable[None]]],
+    timeout_seconds: int = 40,
+) -> str:
+    cache_key = _hash_payload(f"{agent_name}:{report}")
+    cached_output = await _get_agent_cache(cache_key)
+    if cached_output:
+        await _emit_progress(
+            progress_callback,
+            stage,
+            f"{agent_name} cache hit.",
+        )
+        return cached_output
+
+    await _emit_progress(progress_callback, stage, f"{agent_name} started...")
+    agent = agent_builder(tools)
+    task = Task(
+        description=task_description,
+        expected_output=expected_output,
+        agent=agent,
+    )
+    crew = Crew(agents=[agent], tasks=[task], verbose=False)
+
+    async with _validation_agent_semaphore:
+        output = await _run_crew_async(crew, timeout_seconds)
+
+    await _set_agent_cache(cache_key, output)
+    await _emit_progress(progress_callback, stage, f"{agent_name} completed.")
+    return output
+
+
+async def _run_parallel_validation(
+    *,
+    agents: VeritasAgents,
+    query: str,
+    raw_report: str,
+    progress_callback: Optional[Callable[[str, str], Awaitable[None]]] = None,
+) -> Dict[str, str]:
+    verification_tools = [domain_credibility_tool, kg_validate_tool]
+    fact_check_tools = [rag_fact_check_tool, domain_credibility_tool, kg_validate_tool]
+    misinformation_tools = [fake_news_detector_tool, truth_scoring_tool]
+
+    tasks = [
+        _run_validation_agent(
+            agent_name="Verification Agent",
+            stage="verification",
+            report=raw_report,
+            agent_builder=agents.verification_agent,
+            tools=verification_tools,
+            task_description=(
+                f"Verify source credibility and evidence integrity for query: '{query}'.\n"
+                f"Report:\n{raw_report}"
+            ),
+            expected_output="Source credibility checks with verified/unverified evidence flags.",
+            progress_callback=progress_callback,
+        ),
+        _run_validation_agent(
+            agent_name="Fact Checker",
+            stage="fact_check",
+            report=raw_report,
+            agent_builder=agents.fact_checking_agent,
+            tools=fact_check_tools,
+            task_description=(
+                f"Cross-check factual claims for query: '{query}'.\n"
+                f"Report:\n{raw_report}"
+            ),
+            expected_output="Claim-by-claim fact-check results with support/contradiction notes.",
+            progress_callback=progress_callback,
+        ),
+        _run_validation_agent(
+            agent_name="Misinformation Analyzer",
+            stage="misinformation",
+            report=raw_report,
+            agent_builder=agents.misinformation_agent,
+            tools=misinformation_tools,
+            task_description=(
+                f"Analyze narrative manipulation and misinformation risk for query: '{query}'.\n"
+                f"Report:\n{raw_report}"
+            ),
+            expected_output="Misinformation risk summary with manipulation indicators and confidence.",
+            progress_callback=progress_callback,
+        ),
+    ]
+
+    verification_result, fact_check_result, misinformation_result = await asyncio.gather(
+        *tasks
+    )
+    return {
+        "verification_result": verification_result,
+        "fact_check_result": fact_check_result,
+        "misinformation_result": misinformation_result,
+    }
+
+
 async def run_multi_agent_pipeline(
-    query: str, progress_callback: Optional[Callable[[str, str], None]] = None
+    query: str,
+    progress_callback: Optional[Callable[[str, str], Awaitable[None]]] = None,
 ) -> QueryResponse:
     """
     Veritas AI Main Pipeline - Optimized for Low Latency.
@@ -110,14 +224,17 @@ async def run_multi_agent_pipeline(
 
     try:
         agents = VeritasAgents()
-        
-        # --- PHASE 4: REDUCED LLM CALLS (Step 1: Research) ---
-        if progress_callback:
-            await progress_callback("data_collection", "Researching and gathering sources...")
-            
-        research_key = hashlib.md5(f"research:{normalized_query}".encode()).hexdigest()
+
+        # Step 1: Research
+        await _emit_progress(
+            progress_callback,
+            "data_collection",
+            "Researching and gathering sources...",
+        )
+
+        research_key = _hash_payload(f"research:{normalized_query}")
         cached_research = await _get_agent_cache(research_key)
-        
+
         if cached_research:
             ctx.raw_report = cached_research
         else:
@@ -132,46 +249,29 @@ async def run_multi_agent_pipeline(
             ctx.raw_report = await _run_crew_async(crew, 45)
             await _set_agent_cache(research_key, ctx.raw_report)
 
-        # --- PHASE 8: UNIFIED VALIDATION (Step 2: Analysis) ---
-        if progress_callback:
-            await progress_callback("analysis", "Validating facts and detecting misinformation...")
+        # Step 2: Parallel validation
+        await _emit_progress(
+            progress_callback,
+            "parallel_agents",
+            "Running verification, fact-checking, and misinformation analysis in parallel...",
+        )
 
-        validation_key = hashlib.md5(f"validate:{ctx.raw_report}".encode()).hexdigest()
-        cached_validation = await _get_agent_cache(validation_key)
-
-        if cached_validation:
-            ctx.verification_result = cached_validation
-            ctx.fact_check_result = cached_validation
-            ctx.misinformation_result = cached_validation
-        else:
-            # Phase 6: Optimized RAG call (embedded in validation tools)
-            # Phase 8: Unified Validation Agent call
-            tools = [
-                domain_credibility_tool, 
-                fake_news_detector_tool,
-                rag_fact_check_tool,
-                kg_validate_tool
-            ]
-            # Internal Fact Checker uses RAG and KG internally via tools
-            validator = agents.unified_validation_agent(tools)
-
-            
-            task = Task(
-                description=f"Perform truth assessment on the following report:\n{ctx.raw_report}",
-                expected_output="A structured assessment with credibility scores and fact-checks.",
-                agent=validator
-            )
-            crew = Crew(agents=[validator], tasks=[task], verbose=False)
-            validation_out = await _run_crew_async(crew, 45)
-            
-            ctx.verification_result = validation_out
-            ctx.fact_check_result = validation_out
-            ctx.misinformation_result = validation_out
-            await _set_agent_cache(validation_key, validation_out)
+        validation_results = await _run_parallel_validation(
+            agents=agents,
+            query=normalized_query,
+            raw_report=ctx.raw_report,
+            progress_callback=progress_callback,
+        )
+        ctx.verification_result = validation_results["verification_result"]
+        ctx.fact_check_result = validation_results["fact_check_result"]
+        ctx.misinformation_result = validation_results["misinformation_result"]
 
         # --- PHASE 11: RESPONSE BUILDING ---
-        if progress_callback:
-            await progress_callback("scoring", "Finalizing truth assessment score...")
+        await _emit_progress(
+            progress_callback,
+            "scoring",
+            "Finalizing truth assessment score...",
+        )
 
         response = await _build_final_response(ctx)
         
@@ -230,14 +330,14 @@ async def run_fast_pipeline(query: str) -> QueryResponse:
     Single LLM call using a lightweight model.
     """
     agents = VeritasAgents()
-    unified_agent = agents.unified_validation_agent() # Will use faster LLM tier
+    fast_agent = agents.fast_validation_agent()
     
     task = Task(
         description=f"Quick truth assessment for: '{query}'",
         expected_output="Factual summary, sources, and truth score.",
-        agent=unified_agent
+        agent=fast_agent
     )
-    crew = Crew(agents=[unified_agent], tasks=[task], verbose=False)
+    crew = Crew(agents=[fast_agent], tasks=[task], verbose=False)
     result = await _run_crew_async(crew, 30)
     
     return build_query_response(query, str(result))
@@ -268,4 +368,3 @@ def deploy_event_consumers() -> List[asyncio.Task]:
 
 async def shutdown_event_consumers() -> None:
     await event_bus.shutdown()
-

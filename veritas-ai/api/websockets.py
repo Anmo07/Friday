@@ -12,7 +12,7 @@ from config.settings import settings
 from core.cache_layer import query_cache
 from core.history_store import log_query_result
 from core.redis_cache import redis_cache
-from core.router import router as query_router
+from core.router import RoutingDecision, router as query_router
 from core.security import validate_api_key
 from pipelines.event_bus import event_bus
 from pipelines.multi_agent_pipeline import run_multi_agent_pipeline, run_fast_pipeline
@@ -178,9 +178,9 @@ async def websocket_query_endpoint(websocket: WebSocket):
 
             await _send_progress(websocket, "routing", 15, "Routing query...")
 
-            routing_result = query_router.route(query)
+            routing_result = await query_router.route(query)
 
-            if routing_result.decision.value == "fast_path":
+            if routing_result.decision == RoutingDecision.FAST_PATH:
                 await _send_progress(
                     websocket, "parallel_agents", 30, "Running fast analysis..."
                 )

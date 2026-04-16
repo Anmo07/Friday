@@ -1,5 +1,5 @@
 # --- BUILD STAGE ---
-FROM python:3.11-slim-bookworm AS builder
+FROM python:3.11-slim AS builder
 
 ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
@@ -19,7 +19,7 @@ RUN pip install --user --upgrade pip && \
     pip install --user -r requirements.txt
 
 # --- FINAL STAGE ---
-FROM python:3.11-slim-bookworm
+FROM python:3.11-slim
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \

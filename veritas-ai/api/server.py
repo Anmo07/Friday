@@ -1,19 +1,20 @@
 import asyncio
-import logging
 import time
-from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field, field_validator
 
 from config.settings import settings
 from core.alert_engine import get_recent_alerts
-from core.cache_layer import query_cache
 from core.history_store import fetch_recent_history, log_query_result
 from core.predictive_engine import predictive_engine
 from core.redis_cache import redis_cache
-from core.router import router as query_router, RoutingDecision
+from core.router import (
+    RoutingDecision,
+    route_and_execute,
+    router as query_router,
+)
 from core.security import get_api_key
 from feedback.feedback_service import UserFeedback, process_and_log_feedback
 from feedback.network_effect_builder import extract_and_build_dataset
@@ -27,7 +28,6 @@ from models.schemas import (
     StreamAuthorizationResponse,
 )
 from pipelines.multi_agent_pipeline import (
-    PipelineError,
     run_multi_agent_pipeline,
     run_fast_pipeline,
 )

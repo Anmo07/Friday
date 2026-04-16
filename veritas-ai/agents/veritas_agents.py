@@ -1,12 +1,8 @@
-from typing import Any, List
+from typing import Any, List, Optional
 
 from crewai import Agent
-from models.llm import get_llm
 
-
-from typing import Any, List
-from crewai import Agent
-from models.multi_llm import get_llm, get_fast_llm, get_heavy_llm, ModelTier
+from models.multi_llm import ModelTier, get_fast_llm, get_heavy_llm, get_llm
 
 class VeritasAgents:
     """
@@ -35,6 +31,75 @@ class VeritasAgents:
             max_iter=3
         )
 
+    def verification_agent(self, tools: List[Any]) -> Agent:
+        """
+        Phase 1 role: source verification specialist.
+        """
+        return Agent(
+            role="Verification Agent",
+            goal="Validate source trustworthiness and evidence quality for: {query}",
+            backstory=(
+                "You are a rigorous verification specialist. You inspect source credibility, "
+                "check provenance, and flag unsupported evidence."
+            ),
+            verbose=False,
+            allow_delegation=False,
+            tools=tools,
+            llm=self.medium_llm,
+            max_iter=2,
+        )
+
+    def fact_checking_agent(self, tools: List[Any]) -> Agent:
+        """
+        Phase 1 role: claim-level fact checker.
+        """
+        return Agent(
+            role="Fact Checker",
+            goal="Cross-reference claims against trusted evidence and retrieval context.",
+            backstory=(
+                "You are a fast factual verification analyst. You test each claim against "
+                "retrieval and structured context and produce contradiction-aware findings."
+            ),
+            verbose=False,
+            allow_delegation=False,
+            tools=tools,
+            llm=self.medium_llm,
+            max_iter=2,
+        )
+
+    def misinformation_agent(self, tools: List[Any]) -> Agent:
+        """
+        Phase 1 role: misinformation pattern analyzer.
+        """
+        return Agent(
+            role="Misinformation Analyzer",
+            goal="Detect manipulation patterns, propaganda signals, and confidence risks.",
+            backstory=(
+                "You are a specialized misinformation analyst. You classify deceptive patterns, "
+                "identify emotional manipulation, and estimate fake-news likelihood."
+            ),
+            verbose=False,
+            allow_delegation=False,
+            tools=tools,
+            llm=self.fast_llm,
+            max_iter=2,
+        )
+
+    def fast_validation_agent(self, tools: Optional[List[Any]] = None) -> Agent:
+        """
+        Fast-path validation for simple queries.
+        """
+        return Agent(
+            role="Rapid Truth Assessor",
+            goal="Produce a concise, low-latency truth assessment for straightforward queries.",
+            backstory="You provide quick, practical verification summaries with minimal overhead.",
+            verbose=False,
+            allow_delegation=False,
+            tools=tools or [],
+            llm=self.fast_llm,
+            max_iter=1,
+        )
+
     def unified_validation_agent(self, tools: List[Any] = None) -> Agent:
         """
         Merged Validation Agent (Fact Checker + KG + Misinformation + Critic).
@@ -52,13 +117,8 @@ class VeritasAgents:
             llm=self.heavy_llm
         )
 
-    # Legacy compatibility methods (refactored to use merged logic)
-    def verification_agent(self, tools: List[Any]) -> Agent:
-        return self.unified_validation_agent(tools)
-
-    def fact_checking_agent(self, tools: List[Any]) -> Agent:
-        return self.unified_validation_agent(tools)
-
     def fake_news_agent(self, tools: List[Any]) -> Agent:
-        return self.unified_validation_agent(tools)
-
+        """
+        Backward-compatible alias.
+        """
+        return self.misinformation_agent(tools)
