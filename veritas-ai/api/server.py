@@ -55,64 +55,32 @@ class PerformanceMetrics(BaseModel):
 
 
 async def _resolve_query(clean_query: str) -> tuple[QueryResponse, PerformanceMetrics]:
+    """
+    Unified query resolution using the Smart Routing layer.
+    Phase 2 & 3: Handles caching and routing internally.
+    """
     start_time = time.time()
-
-    try:
-        predictive_engine.ingest_payload(clean_query)
-    except Exception as exc:
-        logging.warning("Predictive ingestion skipped: %s", exc)
-
-    redis_cached = await redis_cache.get(clean_query)
-    if redis_cached is not None:
-        latency_ms = (time.time() - start_time) * 1000
-        cached_response = redis_cached.model_copy(
-            update={"timestamp": datetime.utcnow().isoformat() + "Z"}
-        )
-        await asyncio.to_thread(log_query_result, cached_response)
-        return cached_response, PerformanceMetrics(
-            latency_ms=latency_ms, cache_hit=True, routing_decision="redis_cache"
-        )
-
-    local_cached = query_cache.get(clean_query)
-    if local_cached is not None:
-        latency_ms = (time.time() - start_time) * 1000
-        cached_response = local_cached.model_copy(
-            update={"timestamp": datetime.utcnow().isoformat() + "Z"}
-        )
-        await asyncio.to_thread(log_query_result, cached_response)
-        return cached_response, PerformanceMetrics(
-            latency_ms=latency_ms, cache_hit=True, routing_decision="local_cache"
-        )
-
-    routing_result = query_router.route(clean_query)
-
-    if routing_result.decision == RoutingDecision.FAST_PATH:
-        try:
-            response = await run_fast_pipeline(clean_query)
-            await redis_cache.set(clean_query, response)
-            latency_ms = (time.time() - start_time) * 1000
-            await asyncio.to_thread(log_query_result, response)
-            return response, PerformanceMetrics(
-                latency_ms=latency_ms, cache_hit=False, routing_decision="fast_path"
-            )
-        except Exception as exc:
-            logging.warning(
-                "Fast pipeline failed, falling back to full pipeline: %s", exc
-            )
-
-    try:
-        response = await run_multi_agent_pipeline(clean_query)
-    except PipelineError as exc:
-        raise HTTPException(status_code=504, detail=str(exc)) from exc
-
-    await redis_cache.set(clean_query, response)
-    query_cache.set(clean_query, response)
-    await asyncio.to_thread(log_query_result, response)
-
-    latency_ms = (time.time() - start_time) * 1000
-    return response, PerformanceMetrics(
-        latency_ms=latency_ms, cache_hit=False, routing_decision="full_pipeline"
+    
+    # Use the unified route_and_execute logic
+    response, routing_result = await route_and_execute(
+        query=clean_query,
+        fast_pipeline_fn=run_fast_pipeline,
+        full_pipeline_fn=run_multi_agent_pipeline
     )
+    
+    latency_ms = (time.time() - start_time) * 1000
+    cache_hit = (routing_result.decision == RoutingDecision.CACHE_HIT)
+    
+    # Log result asynchronously
+    await asyncio.to_thread(log_query_result, response)
+    
+    # Update metrics and return
+    return response, PerformanceMetrics(
+        latency_ms=latency_ms,
+        cache_hit=cache_hit,
+        routing_decision=routing_result.decision.value
+    )
+
 
 
 @router.post("/query", response_model=QueryResponse)

@@ -1,11 +1,12 @@
 import asyncio
+import hashlib
+import json
 import logging
 import uuid
 from contextlib import suppress
 from datetime import datetime
-from typing import Dict, List, Optional, Callable, Any
+from typing import Dict, List, Optional, Callable, Any, Tuple
 from dataclasses import dataclass, field
-from enum import Enum
 
 from crewai import Crew, Process, Task
 
@@ -15,26 +16,22 @@ from core.alert_engine import AlertEngine, record_alerts
 from core.consensus_engine import ConsensusEngine
 from core.explainability_layer import ExplainabilityLayer
 from core.firewall import HallucinationFirewall
+from core.redis_cache import redis_cache, vector_cache
 from models.schemas import QueryResponse
 from pipelines.event_bus import event_bus
 from pipelines.response_builder import build_query_response
+from pipelines.retrieval_pipeline import retrieve_relevant_context_async
 from tools.kg_tools import kg_build_tool, kg_validate_tool
 from tools.news_api import news_search_tool
 from tools.nlp_tools import fake_news_detector_tool
 from tools.rss_reader import rss_reader_tool
 from tools.truth_tools import truth_scoring_tool
-from tools.verification_tools import domain_credibility_tool, rag_fact_check_tool
+from tools.verification_tools import domain_credibility_tool
 from tools.web_scraper import web_scrape_tool
 
 
 class PipelineError(RuntimeError):
     """Raised when a pipeline session cannot complete safely."""
-
-
-class QueryComplexity(Enum):
-    SIMPLE = "simple"
-    MEDIUM = "medium"
-    COMPLEX = "complex"
 
 
 @dataclass
@@ -51,27 +48,193 @@ class PipelineContext:
 
 _consumer_tasks: List[asyncio.Task] = []
 _inflight_queries: Dict[str, asyncio.Future] = {}
-_llm_cache: Dict[str, Any] = {}
 
 
-def _get_cached_llm():
-    if "llm" not in _llm_cache:
-        _llm_cache["llm"] = VeritasAgents().llm
-    return _llm_cache["llm"]
 
-
-async def _run_crew(crew: Crew, timeout_seconds: int) -> str:
+async def _run_crew_async(crew: Crew, timeout_seconds: int) -> str:
+    """
+    Executes a crew kickoff in a non-blocking thread and returns the result.
+    """
     try:
-        return await asyncio.wait_for(
+        # Phase 10: Ensure safe async execution of CrewAI logic
+        result = await asyncio.wait_for(
             asyncio.to_thread(crew.kickoff),
             timeout=timeout_seconds,
         )
+        return str(result)
     except asyncio.TimeoutError as exc:
-        raise PipelineError(
-            "The agent pipeline timed out before it could complete."
-        ) from exc
+        raise PipelineError("Agent execution timed out.") from exc
     except Exception as exc:
+        logging.error(f"Crew execution error: {exc}")
         raise PipelineError(str(exc)) from exc
+
+
+async def _get_agent_cache(key: str) -> Optional[str]:
+    """Phase 3: Hash-based agent output caching."""
+    if not redis_cache._redis: return None
+    try:
+        return await redis_cache._redis.get(f"agent_cache:{key}")
+    except Exception: return None
+
+
+async def _set_agent_cache(key: str, value: str, ttl: int = 1800):
+    """Phase 3: Cache agent outputs with TTL."""
+    if not redis_cache._redis: return
+    try:
+        await redis_cache._redis.setex(f"agent_cache:{key}", ttl, value)
+    except Exception: pass
+
+
+async def run_multi_agent_pipeline(
+    query: str, progress_callback: Optional[Callable[[str, str], None]] = None
+) -> QueryResponse:
+    """
+    Veritas AI Main Pipeline - Optimized for Low Latency.
+    Phases 1-11 implemented here.
+    """
+    normalized_query = " ".join(query.strip().split())
+    if not normalized_query:
+        raise PipelineError("Query string cannot be empty.")
+
+    # Deduplicate in-flight queries
+    existing_future = _inflight_queries.get(normalized_query.lower())
+    if existing_future is not None:
+        return await asyncio.shield(existing_future)
+
+    loop = asyncio.get_running_loop()
+    shared_future = loop.create_future()
+    _inflight_queries[normalized_query.lower()] = shared_future
+    
+    session_id = str(uuid.uuid4())
+    ctx = PipelineContext(session_id=session_id, query=normalized_query, progress_callback=progress_callback)
+
+    try:
+        agents = VeritasAgents()
+        
+        # --- PHASE 4: REDUCED LLM CALLS (Step 1: Research) ---
+        if progress_callback:
+            await progress_callback("data_collection", "Researching and gathering sources...")
+            
+        research_key = hashlib.md5(f"research:{normalized_query}".encode()).hexdigest()
+        cached_research = await _get_agent_cache(research_key)
+        
+        if cached_research:
+            ctx.raw_report = cached_research
+        else:
+            tools = [news_search_tool, web_scrape_tool, rss_reader_tool]
+            researcher = agents.research_agent(tools)
+            task = Task(
+                description=f"Gather evidence for: '{query}'. Provide raw facts and sources.",
+                expected_output="A list of facts and source URLs.",
+                agent=researcher
+            )
+            crew = Crew(agents=[researcher], tasks=[task], verbose=False)
+            ctx.raw_report = await _run_crew_async(crew, 45)
+            await _set_agent_cache(research_key, ctx.raw_report)
+
+        # --- PHASE 8: UNIFIED VALIDATION (Step 2: Analysis) ---
+        if progress_callback:
+            await progress_callback("analysis", "Validating facts and detecting misinformation...")
+
+        validation_key = hashlib.md5(f"validate:{ctx.raw_report}".encode()).hexdigest()
+        cached_validation = await _get_agent_cache(validation_key)
+
+        if cached_validation:
+            ctx.verification_result = cached_validation
+            ctx.fact_check_result = cached_validation
+            ctx.misinformation_result = cached_validation
+        else:
+            # Phase 6: Optimized RAG call (embedded in validation tools)
+            # Phase 8: Unified Validation Agent call
+            tools = [domain_credibility_tool, fake_news_detector_tool]
+            # Internal Fact Checker uses RAG internally via the tool
+            validator = agents.unified_validation_agent(tools)
+            
+            task = Task(
+                description=f"Perform truth assessment on the following report:\n{ctx.raw_report}",
+                expected_output="A structured assessment with credibility scores and fact-checks.",
+                agent=validator
+            )
+            crew = Crew(agents=[validator], tasks=[task], verbose=False)
+            validation_out = await _run_crew_async(crew, 45)
+            
+            ctx.verification_result = validation_out
+            ctx.fact_check_result = validation_out
+            ctx.misinformation_result = validation_out
+            await _set_agent_cache(validation_key, validation_out)
+
+        # --- PHASE 11: RESPONSE BUILDING ---
+        if progress_callback:
+            await progress_callback("scoring", "Finalizing truth assessment score...")
+
+        response = await _build_final_response(ctx)
+        
+        shared_future.set_result(response)
+        return response
+
+    except Exception as exc:
+        logging.exception("Pipeline failed")
+        fallback = _fallback_response(normalized_query, str(exc))
+        if not shared_future.done():
+            shared_future.set_result(fallback)
+        return fallback
+
+    finally:
+        _inflight_queries.pop(normalized_query.lower(), None)
+
+
+async def _build_final_response(ctx: PipelineContext) -> QueryResponse:
+    """
+    Constructs the final QueryResponse object using the consensus and engine layers.
+    """
+    combined_report = "\n\n".join(filter(None, [
+        ctx.raw_report,
+        ctx.verification_result,
+        ctx.fact_check_result,
+        ctx.misinformation_result
+    ]))
+
+    # Phase 11: Optimized response builder mapping
+    formatted_response = build_query_response(ctx.query, combined_report)
+
+    # Core logic modules (fast, synchronous calculation)
+    consensus_engine = ConsensusEngine()
+    unified_response = consensus_engine.evaluate(formatted_response)
+
+    explainer = ExplainabilityLayer()
+    explained_response = explainer.evaluate(unified_response)
+
+    firewall = HallucinationFirewall()
+    final_response = firewall.evaluate(explained_response)
+
+    # Alert generation
+    alert_engine = AlertEngine()
+    triggered_alerts = alert_engine.evaluate(final_response)
+    if triggered_alerts:
+        record_alerts(triggered_alerts)
+        for alert in triggered_alerts:
+            await event_bus.publish("global_alerts", "ALERT_TRIGGERED", alert)
+
+    return final_response
+
+
+async def run_fast_pipeline(query: str) -> QueryResponse:
+    """
+    Phase 2: Fast Path implementation.
+    Single LLM call using a lightweight model.
+    """
+    agents = VeritasAgents()
+    unified_agent = agents.unified_validation_agent() # Will use faster LLM tier
+    
+    task = Task(
+        description=f"Quick truth assessment for: '{query}'",
+        expected_output="Factual summary, sources, and truth score.",
+        agent=unified_agent
+    )
+    crew = Crew(agents=[unified_agent], tasks=[task], verbose=False)
+    result = await _run_crew_async(crew, 30)
+    
+    return build_query_response(query, str(result))
 
 
 def _fallback_response(query: str, message: str) -> QueryResponse:
@@ -89,291 +252,14 @@ def _fallback_response(query: str, message: str) -> QueryResponse:
     )
 
 
-async def _run_parallel_agents(
-    ctx: PipelineContext, llm: Any, timeout: int
-) -> tuple[str, str, str]:
-    agents = VeritasAgents()
-    tools = [news_search_tool, web_scrape_tool, rss_reader_tool]
-
-    planner = agents.planner_agent()
-    executor = agents.executor_agent(tools)
-
-    planning_task = Task(
-        description=f"Analyze query: '{ctx.query}'. Create a step-by-step strategy to gather evidence.",
-        expected_output="A compact, actionable execution plan.",
-        agent=planner,
-    )
-
-    execution_task = Task(
-        description=(
-            "Using the planner's strategy, execute the available tools to collect evidence. "
-            "Do not invent URLs, sources, or evidence that are not returned by the tools."
-        ),
-        expected_output="A compiled evidence report containing raw facts and source links.",
-        agent=executor,
-    )
-
-    data_crew = Crew(
-        agents=[planner, executor],
-        tasks=[planning_task, execution_task],
-        process=Process.sequential,
-        verbose=False,
-    )
-    raw_result = await _run_crew(data_crew, timeout)
-    ctx.raw_report = str(raw_result)
-
-    verifier = agents.verification_agent([domain_credibility_tool])
-    fact_checker = agents.fact_checking_agent(
-        [rag_fact_check_tool, kg_build_tool, kg_validate_tool]
-    )
-    fake_news_analyzer = agents.fake_news_agent([fake_news_detector_tool])
-
-    async def run_verification() -> str:
-        task = Task(
-            description=(
-                "Extract all URLs from the report and evaluate their credibility. "
-                f"RAW REPORT:\n{ctx.raw_report}"
-            ),
-            expected_output="Report with source credibility annotations.",
-            agent=verifier,
-        )
-        crew = Crew(agents=[verifier], tasks=[task], verbose=False)
-        return str(await _run_crew(crew, timeout))
-
-    async def run_fact_check() -> str:
-        task = Task(
-            description=(
-                "Extract key entities, validate with Knowledge Graph, and cross-check claims with RAG. "
-                f"REPORT:\n{ctx.raw_report}"
-            ),
-            expected_output="Report with fact validation notes.",
-            agent=fact_checker,
-        )
-        crew = Crew(agents=[fact_checker], tasks=[task], verbose=False)
-        return str(await _run_crew(crew, timeout))
-
-    async def run_misinformation_check() -> str:
-        task = Task(
-            description=(
-                "Analyze the report for fake news indicators, emotional manipulation, and misinformation patterns. "
-                f"REPORT:\n{ctx.raw_report}"
-            ),
-            expected_output="Report with misinformation analysis.",
-            agent=fake_news_analyzer,
-        )
-        crew = Crew(agents=[fake_news_analyzer], tasks=[task], verbose=False)
-        return str(await _run_crew(crew, timeout))
-
-    try:
-        (
-            verification_result,
-            fact_check_result,
-            misinformation_result,
-        ) = await asyncio.gather(
-            run_verification(),
-            run_fact_check(),
-            run_misinformation_check(),
-            return_exceptions=True,
-        )
-
-        ctx.verification_result = (
-            verification_result
-            if not isinstance(verification_result, Exception)
-            else None
-        )
-        ctx.fact_check_result = (
-            fact_check_result if not isinstance(fact_check_result, Exception) else None
-        )
-        ctx.misinformation_result = (
-            misinformation_result
-            if not isinstance(misinformation_result, Exception)
-            else None
-        )
-
-        if isinstance(verification_result, Exception):
-            ctx.errors.append(f"Verification failed: {verification_result}")
-        if isinstance(fact_check_result, Exception):
-            ctx.errors.append(f"Fact check failed: {fact_check_result}")
-        if isinstance(misinformation_result, Exception):
-            ctx.errors.append(f"Misinformation check failed: {misinformation_result}")
-
-        return (
-            ctx.verification_result or ctx.raw_report,
-            ctx.fact_check_result or ctx.raw_report,
-            ctx.misinformation_result or ctx.raw_report,
-        )
-
-    except Exception as exc:
-        logging.exception("Parallel agent execution failed")
-        ctx.errors.append(str(exc))
-        return ctx.raw_report, ctx.raw_report, ctx.raw_report
-
-
-async def _build_final_response(ctx: PipelineContext) -> QueryResponse:
-    combined_report = "\n\n".join(
-        filter(
-            None,
-            [
-                ctx.raw_report,
-                ctx.verification_result,
-                ctx.fact_check_result,
-                ctx.misinformation_result,
-            ],
-        )
-    )
-
-    formatted_response = build_query_response(ctx.query, combined_report)
-
-    consensus_engine = ConsensusEngine()
-    unified_response = consensus_engine.evaluate(formatted_response)
-
-    explainer = ExplainabilityLayer()
-    explained_response = explainer.evaluate(unified_response)
-
-    firewall = HallucinationFirewall()
-    final_response = firewall.evaluate(explained_response)
-
-    alert_engine = AlertEngine()
-    triggered_alerts = alert_engine.evaluate(final_response)
-    if triggered_alerts:
-        record_alerts(triggered_alerts)
-        for alert in triggered_alerts:
-            await event_bus.publish("global_alerts", "ALERT_TRIGGERED", alert)
-
-    return final_response
-
-
-async def run_multi_agent_pipeline(
-    query: str, progress_callback: Optional[Callable[[str, str], None]] = None
-) -> QueryResponse:
-    normalized_query = " ".join(query.strip().split())
-    if not normalized_query:
-        raise PipelineError("Query string cannot be empty.")
-
-    existing_future = _inflight_queries.get(normalized_query.lower())
-    if existing_future is not None:
-        return await asyncio.shield(existing_future)
-
-    loop = asyncio.get_running_loop()
-    shared_future = loop.create_future()
-    _inflight_queries[normalized_query.lower()] = shared_future
-    session_id = str(uuid.uuid4())
-
-    ctx = PipelineContext(
-        session_id=session_id,
-        query=normalized_query,
-        progress_callback=progress_callback,
-    )
-
-    try:
-        llm = _get_cached_llm()
-
-        if progress_callback:
-            await progress_callback(
-                "data_collection", "Collecting data from multiple sources..."
-            )
-
-        verification, fact_check, misinformation = await _run_parallel_agents(
-            ctx, llm, settings.AGENT_TASK_TIMEOUT_SECONDS
-        )
-
-        if progress_callback:
-            await progress_callback("validation", "Validating and scoring results...")
-
-        final_response = await _build_final_response(ctx)
-
-        if ctx.errors and progress_callback:
-            await progress_callback(
-                "warnings", f"Completed with {len(ctx.errors)} issues"
-            )
-
-        shared_future.set_result(final_response)
-        return final_response
-
-    except asyncio.TimeoutError:
-        message = "The verification pipeline exceeded its timeout budget."
-        fallback = _fallback_response(normalized_query, message)
-        if not shared_future.done():
-            shared_future.set_result(fallback)
-        return fallback
-
-    except Exception as exc:
-        logging.exception("Pipeline failed for query '%s'", normalized_query)
-        fallback = _fallback_response(normalized_query, str(exc))
-        if not shared_future.done():
-            shared_future.set_result(fallback)
-        return fallback
-
-    finally:
-        _inflight_queries.pop(normalized_query.lower(), None)
-
-
-async def run_fast_pipeline(query: str) -> QueryResponse:
-    normalized_query = " ".join(query.strip().split())
-    if not normalized_query:
-        raise PipelineError("Query string cannot be empty.")
-
-    existing_future = _inflight_queries.get(normalized_query.lower())
-    if existing_future is not None:
-        return await asyncio.shield(existing_future)
-
-    loop = asyncio.get_running_loop()
-    shared_future = loop.create_future()
-    _inflight_queries[normalized_query.lower()] = shared_future
-
-    try:
-        agents = VeritasAgents()
-        llm = _get_cached_llm()
-
-        unified_agent = agents.unified_validation_agent(llm)
-
-        task = Task(
-            description=(
-                f"Analyze the following query and provide a quick truth assessment:\n\n"
-                f"QUERY: {normalized_query}\n\n"
-                "Return a structured report with:\n"
-                "1. Key facts identified\n"
-                "2. Source credibility assessment\n"
-                "3. Potential misinformation indicators\n"
-                "4. Truth score (0.0-1.0)"
-            ),
-            expected_output="A concise truth assessment report.",
-            agent=unified_agent,
-        )
-
-        crew = Crew(agents=[unified_agent], tasks=[task], verbose=False)
-        result = await _run_crew(crew, 60)
-
-        final_response = build_query_response(normalized_query, str(result))
-
-        shared_future.set_result(final_response)
-        return final_response
-
-    except Exception as exc:
-        logging.exception("Fast pipeline failed for query '%s'", normalized_query)
-        fallback = _fallback_response(normalized_query, str(exc))
-        if not shared_future.done():
-            shared_future.set_result(fallback)
-        return fallback
-
-    finally:
-        _inflight_queries.pop(normalized_query.lower(), None)
-
-
 def deploy_event_consumers() -> List[asyncio.Task]:
     global _consumer_tasks
     if _consumer_tasks:
         return _consumer_tasks
-    logging.info("Optimized parallel pipeline initialized (no consumer nodes needed).")
+    logging.info("Optimized parallel pipeline initialized.")
     return _consumer_tasks
 
 
 async def shutdown_event_consumers() -> None:
-    global _consumer_tasks
-    for task in _consumer_tasks:
-        task.cancel()
-    for task in _consumer_tasks:
-        with suppress(asyncio.CancelledError):
-            await task
-    _consumer_tasks = []
     await event_bus.shutdown()
+
