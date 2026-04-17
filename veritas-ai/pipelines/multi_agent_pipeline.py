@@ -69,18 +69,22 @@ async def _run_crew_async(crew: Crew, timeout_seconds: int) -> str:
 
 async def _get_agent_cache(key: str) -> Optional[str]:
     """Phase 3: Hash-based agent output caching."""
-    if not redis_cache._redis: return None
+    if not redis_cache._redis:
+        return None
     try:
         return await redis_cache._redis.get(f"agent_cache:{key}")
-    except Exception: return None
+    except Exception:
+        return None
 
 
 async def _set_agent_cache(key: str, value: str, ttl: int = 1800):
     """Phase 3: Cache agent outputs with TTL."""
-    if not redis_cache._redis: return
+    if not redis_cache._redis:
+        return
     try:
         await redis_cache._redis.setex(f"agent_cache:{key}", ttl, value)
-    except Exception: pass
+    except Exception:
+        pass
 
 
 def _hash_payload(payload: str) -> str:

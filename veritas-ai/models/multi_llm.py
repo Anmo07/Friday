@@ -114,7 +114,7 @@ class LLMManager:
             try:
                 llm = self.get_llm(tier)
                 config = LLM_CONFIGS[tier]
-                result = llm.invoke("Hello")
+                llm.invoke("Hello")
                 loaded_models.append(config.name)
             except Exception as e:
                 print(f"Warning: Could not preload {tier.value} model: {e}")
