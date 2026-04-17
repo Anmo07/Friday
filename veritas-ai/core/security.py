@@ -5,7 +5,7 @@ import secrets
 from threading import Lock
 from typing import Dict, Optional
 
-from fastapi import HTTPException, Security, status
+from fastapi import HTTPException, Security, status, Request
 from fastapi.security.api_key import APIKeyHeader
 
 
@@ -57,7 +57,12 @@ def validate_api_key(api_key: Optional[str]) -> str:
         )
 
     with _api_key_lock:
-        client = DEVELOPER_DB.get(api_key)
+        client = None
+        for key, val in DEVELOPER_DB.items():
+            if secrets.compare_digest(api_key, key):
+                client = val
+                break
+                
         if client is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -79,7 +84,32 @@ def validate_api_key(api_key: Optional[str]) -> str:
     return api_key
 
 
-async def get_api_key(api_key: str = Security(api_key_header)) -> str:
+def get_current_user(api_key: str = Security(api_key_header), request: Request = None) -> dict:
+    if not api_key:
+        logging.warning(f"Auth Attempt: Missing API key. IP: {request.client.host if request else 'Unknown'}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="API key missing. Provide an X-API-KEY header.",
+        )
+
+    with _api_key_lock:
+        client = None
+        for key, val in DEVELOPER_DB.items():
+            if secrets.compare_digest(api_key, key):
+                client = val
+                break
+                
+        if client is None:
+            logging.warning(f"Auth Attempt: Invalid API key used. IP: {request.client.host if request else 'Unknown'}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid developer API key.",
+            )
+            
+        return client
+
+async def get_api_key(api_key: str = Security(api_key_header), request: Request = None) -> str:
+    get_current_user(api_key, request)
     return validate_api_key(api_key)
 
 

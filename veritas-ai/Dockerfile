@@ -15,6 +15,8 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 COPY requirements.txt .
+# Note: For production CPU-only environments, consider:
+# RUN pip install --user torch --index-url https://download.pytorch.org/whl/cpu
 RUN pip install --user --upgrade pip && \
     pip install --user -r requirements.txt
 
@@ -23,7 +25,12 @@ FROM python:3.11-slim
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PATH=/root/.local/bin:$PATH
+    PATH=/home/veritas/.local/bin:$PATH \
+    PLAYWRIGHT_BROWSERS_PATH=/app/ms-playwright
+
+# Create a non-privileged user for security
+RUN groupadd -g 1001 veritas && \
+    useradd -u 1001 -g veritas -m -s /bin/bash veritas
 
 # System dependencies for audio, chromium, and ffmpeg
 RUN apt-get update && apt-get install -y \
@@ -48,16 +55,20 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Copy installed packages from builder
-COPY --from=builder /root/.local /root/.local
+COPY --from=builder /root/.local /home/veritas/.local
+RUN chown -R veritas:veritas /home/veritas/.local
 
-# Install Playwright browser
-RUN playwright install --with-deps chromium
+# Create necessary directories and set permissions
+RUN mkdir -p /app/data /app/chroma_db /app/logs /app/ms-playwright && \
+    chown -R veritas:veritas /app
+
+USER veritas
+
+# Install Playwright browser (cached if requirements don't change)
+RUN playwright install chromium
 
 # Copy application source
-COPY . .
-
-# Create persistent storage mount points
-RUN mkdir -p /app/data /app/chroma_db /app/logs
+COPY --chown=veritas:veritas . .
 
 EXPOSE 8000
 

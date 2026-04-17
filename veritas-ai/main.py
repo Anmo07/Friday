@@ -6,8 +6,10 @@ from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
-from api.server import router as api_router
+from api.server import router as api_router, limiter
 from api.websockets import router as ws_router
 from config.settings import settings
 from core.redis_cache import init_redis_cache, close_redis_cache
@@ -58,6 +60,13 @@ app = FastAPI(
     version="0.2.0",
     lifespan=lifespan,
 )
+
+app.state.limiter = limiter
+async def custom_rate_limit_exceeded_handler(request, exc: RateLimitExceeded):
+    logging.warning(f"Unusual traffic pattern detected: Rate limit exceeded. IP: {request.client.host if request.client else 'Unknown'}")
+    return _rate_limit_exceeded_handler(request, exc)
+
+app.add_exception_handler(RateLimitExceeded, custom_rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,

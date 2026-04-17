@@ -2,8 +2,10 @@ import asyncio
 import time
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field, field_validator
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from config.settings import settings
 from core.alert_engine import get_recent_alerts
@@ -15,7 +17,7 @@ from core.router import (
     route_and_execute,
     router as query_router,
 )
-from core.security import get_api_key
+from core.security import get_api_key, get_current_user
 from feedback.feedback_service import UserFeedback, process_and_log_feedback
 from feedback.network_effect_builder import extract_and_build_dataset
 from models.schemas import (
@@ -34,6 +36,7 @@ from pipelines.multi_agent_pipeline import (
 
 
 router = APIRouter(prefix=settings.API_V1_PREFIX)
+limiter = Limiter(key_func=get_remote_address)
 
 
 class QueryRequest(BaseModel):
@@ -54,7 +57,7 @@ class PerformanceMetrics(BaseModel):
     routing_decision: str
 
 
-async def _resolve_query(clean_query: str) -> tuple[QueryResponse, PerformanceMetrics]:
+async def _resolve_query(clean_query: str, owner_email: str = "public") -> tuple[QueryResponse, PerformanceMetrics]:
     """
     Unified query resolution using the Smart Routing layer.
     Phase 2 & 3: Handles caching and routing internally.
@@ -72,7 +75,7 @@ async def _resolve_query(clean_query: str) -> tuple[QueryResponse, PerformanceMe
     cache_hit = (routing_result.decision == RoutingDecision.CACHE_HIT)
     
     # Log result asynchronously
-    await asyncio.to_thread(log_query_result, response)
+    await asyncio.to_thread(log_query_result, response, owner_email)
     
     # Update metrics and return
     return response, PerformanceMetrics(
@@ -84,8 +87,9 @@ async def _resolve_query(clean_query: str) -> tuple[QueryResponse, PerformanceMe
 
 
 @router.post("/query", response_model=QueryResponse)
-async def query_endpoint(request: QueryRequest):
-    response, _ = await _resolve_query(request.query)
+@limiter.limit("5/minute")
+async def query_endpoint(request: Request, body: QueryRequest):
+    response, _ = await _resolve_query(body.query)
     return response
 
 
@@ -101,10 +105,11 @@ async def health_check():
 @router.post(
     "/verify-news", response_model=QueryResponse, tags=["Public Developer API"]
 )
+@limiter.limit("100/minute")
 async def public_verify_news(
-    request: QueryRequest, api_key: str = Depends(get_api_key)
+    request: Request, body: QueryRequest, current_user: dict = Depends(get_current_user)
 ):
-    response, _ = await _resolve_query(request.query)
+    response, _ = await _resolve_query(body.query, current_user["owner"])
     return response
 
 
@@ -113,19 +118,21 @@ async def public_verify_news(
     response_model=StreamAuthorizationResponse,
     tags=["Public Developer API"],
 )
+@limiter.limit("20/minute")
 async def public_stream_analysis(
-    request: QueryRequest, api_key: str = Depends(get_api_key)
+    request: Request, body: QueryRequest, api_key: str = Depends(get_api_key)
 ):
     separator = "&" if "?" in settings.PUBLIC_WS_BASE_URL else "?"
     return StreamAuthorizationResponse(
         status="stream_authorized",
         tunnel_socket_uri=f"{settings.PUBLIC_WS_BASE_URL}{separator}session_auth={api_key}",
-        query_linked=request.query,
+        query_linked=body.query,
     )
 
 
 @router.get("/alerts", response_model=AlertsResponse, tags=["Public Developer API"])
-async def fetch_global_alerts(api_key: str = Depends(get_api_key)):
+@limiter.limit("60/minute")
+async def fetch_global_alerts(request: Request, current_user: dict = Depends(get_current_user)):
     return AlertsResponse(
         status="success",
         active_global_anomalies=get_recent_alerts(),
@@ -133,7 +140,8 @@ async def fetch_global_alerts(api_key: str = Depends(get_api_key)):
 
 
 @router.get("/history", response_model=HistoryResponse, tags=["Internal UI"])
-async def fetch_query_history(limit: int = Query(default=25, ge=1, le=100)):
+@limiter.limit("60/minute")
+async def fetch_query_history(request: Request, limit: int = Query(default=25, ge=1, le=100)):
     items = await asyncio.to_thread(fetch_recent_history, limit)
     return HistoryResponse(status="success", items=items)
 
@@ -143,7 +151,8 @@ async def fetch_query_history(limit: int = Query(default=25, ge=1, le=100)):
     response_model=FeedbackResponse,
     tags=["Public Developer API", "User Telemetry"],
 )
-async def submit_user_feedback(feedback: UserFeedback):
+@limiter.limit("10/minute")
+async def submit_user_feedback(request: Request, feedback: UserFeedback):
     result = await asyncio.to_thread(process_and_log_feedback, feedback)
     return FeedbackResponse(**result)
 
@@ -153,7 +162,8 @@ async def submit_user_feedback(feedback: UserFeedback):
     response_model=FeedbackResponse,
     tags=["Internal ML Pipeline Orchestration"],
 )
-async def trigger_dataset_aggregation(api_key: str = Depends(get_api_key)):
+@limiter.limit("5/minute")
+async def trigger_dataset_aggregation(request: Request, current_user: dict = Depends(get_current_user)):
     result = await asyncio.to_thread(extract_and_build_dataset)
     return FeedbackResponse(
         status=result["status"],
@@ -166,7 +176,8 @@ async def trigger_dataset_aggregation(api_key: str = Depends(get_api_key)):
     response_model=PredictiveTrendsResponse,
     tags=["Public Developer API"],
 )
-async def retrieve_predictive_anomalies(api_key: str = Depends(get_api_key)):
+@limiter.limit("30/minute")
+async def retrieve_predictive_anomalies(request: Request, current_user: dict = Depends(get_current_user)):
     return PredictiveTrendsResponse(
         status="success",
         timestamp_horizon="2_HOUR_SLIDING_WINDOW",
@@ -175,7 +186,8 @@ async def retrieve_predictive_anomalies(api_key: str = Depends(get_api_key)):
 
 
 @router.get("/metrics")
-async def get_performance_metrics():
+@limiter.limit("60/minute")
+async def get_performance_metrics(request: Request):
     return {
         "status": "success",
         "router_metrics": query_router.get_metrics(),
@@ -184,7 +196,8 @@ async def get_performance_metrics():
 
 
 @router.post("/cache/clear")
-async def clear_cache(prefix: Optional[str] = None):
+@limiter.limit("5/minute")
+async def clear_cache(request: Request, prefix: Optional[str] = None):
     await redis_cache.clear(prefix)
     return {
         "status": "success",
