@@ -55,5 +55,6 @@ export interface WebSocketMessage {
   status: "idle" | "processing" | "complete" | "alert" | "error";
   data?: QueryResponse | AlertItem;
   message?: string;
+  progress?: number;
   error?: { message: string };
 }
