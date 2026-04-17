@@ -50,9 +50,14 @@ def init_feedback_database():
                     user_flag TEXT,
                     user_corrected_score REAL,
                     comments TEXT,
-                    pipeline_status TEXT
+                    pipeline_status TEXT,
+                    owner_email TEXT NOT NULL DEFAULT 'public'
                 )
             ''')
+            try:
+                cursor.execute("ALTER TABLE feedback_loop ADD COLUMN owner_email TEXT NOT NULL DEFAULT 'public'")
+            except sqlite3.OperationalError:
+                pass # Column exists
             conn.commit()
         logging.info("Feedback SQLite Array intrinsically provisioned safely.")
     except Exception as e:
@@ -60,7 +65,7 @@ def init_feedback_database():
 
 init_feedback_database()
 
-def process_and_log_feedback(feedback: UserFeedback):
+def process_and_log_feedback(feedback: UserFeedback, owner_email: str = 'public'):
     """
     Ingests explicit user disagreement signals.
     Passively flags them as PENDING_VALIDATION for the Model Improvement cycles (Phase 30).
@@ -70,8 +75,8 @@ def process_and_log_feedback(feedback: UserFeedback):
             cursor = conn.cursor()
             cursor.execute('''
                 INSERT INTO feedback_loop 
-                (timestamp, query, original_truth_score, user_flag, user_corrected_score, comments, pipeline_status)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                (timestamp, query, original_truth_score, user_flag, user_corrected_score, comments, pipeline_status, owner_email)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 datetime.utcnow().isoformat() + "Z",
                 feedback.query.strip(),
@@ -79,7 +84,8 @@ def process_and_log_feedback(feedback: UserFeedback):
                 feedback.user_flag,
                 feedback.user_corrected_score,
                 feedback.comments.strip(),
-                "PENDING_VALIDATION"
+                "PENDING_VALIDATION",
+                owner_email
             ))
             conn.commit()
         return {"status": "success", "tracking_stage": "PENDING_VALIDATION"}

@@ -17,7 +17,7 @@ from core.router import (
     route_and_execute,
     router as query_router,
 )
-from core.security import get_api_key, get_current_user
+from core.security import get_api_key, get_current_user, api_key_header
 from feedback.feedback_service import UserFeedback, process_and_log_feedback
 from feedback.network_effect_builder import extract_and_build_dataset
 from models.schemas import (
@@ -137,12 +137,14 @@ async def fetch_global_alerts(request: Request, current_user: dict = Depends(get
         status="success",
         active_global_anomalies=get_recent_alerts(),
     )
-
-
 @router.get("/history", response_model=HistoryResponse, tags=["Internal UI"])
 @limiter.limit("60/minute")
-async def fetch_query_history(request: Request, limit: int = Query(default=25, ge=1, le=100)):
-    items = await asyncio.to_thread(fetch_recent_history, limit)
+async def fetch_query_history(request: Request, limit: int = Query(default=25, ge=1, le=100), api_key: Optional[str] = Depends(api_key_header)):
+    owner_email = "public"
+    if api_key:
+        user = get_current_user(api_key, request)
+        owner_email = user["owner"]
+    items = await asyncio.to_thread(fetch_recent_history, limit, owner_email)
     return HistoryResponse(status="success", items=items)
 
 
@@ -152,8 +154,12 @@ async def fetch_query_history(request: Request, limit: int = Query(default=25, g
     tags=["Public Developer API", "User Telemetry"],
 )
 @limiter.limit("10/minute")
-async def submit_user_feedback(request: Request, feedback: UserFeedback):
-    result = await asyncio.to_thread(process_and_log_feedback, feedback)
+async def submit_user_feedback(request: Request, feedback: UserFeedback, api_key: Optional[str] = Depends(api_key_header)):
+    owner_email = "public"
+    if api_key:
+        user = get_current_user(api_key, request)
+        owner_email = user["owner"]
+    result = await asyncio.to_thread(process_and_log_feedback, feedback, owner_email)
     return FeedbackResponse(**result)
 
 

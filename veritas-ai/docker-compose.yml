@@ -74,10 +74,10 @@ services:
     container_name: veritas-neo4j
     restart: unless-stopped
     ports:
-      - "7474:7474"
-      - "7687:7687"
+      - "127.0.0.1:7474:7474"
+      - "127.0.0.1:7687:7687"
     environment:
-      - NEO4J_AUTH=neo4j/veritas_secure
+      - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:-veritas_secure}
       - NEO4J_PLUGINS=["apoc"]
     volumes:
       - neo4j_data:/data
@@ -85,7 +85,7 @@ services:
     networks:
       - veritas-network
     healthcheck:
-      test: ["CMD-SHELL", "cypher-shell -u neo4j -p veritas_secure 'RETURN 1' || exit 1"]
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p \"$${NEO4J_PASSWORD:-veritas_secure}\" 'RETURN 1' || exit 1"]
       interval: 30s
       timeout: 10s
       start_period: 30s
@@ -99,7 +99,7 @@ services:
     container_name: veritas-chromadb
     restart: unless-stopped
     ports:
-      - "8200:8000"
+      - "127.0.0.1:8200:8000"
     volumes:
       - chroma_data:/chroma/chroma
     networks:
@@ -111,7 +111,7 @@ services:
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     networks:
@@ -127,7 +127,7 @@ services:
     container_name: veritas-ollama
     restart: unless-stopped
     ports:
-      - "11434:11434"
+      - "127.0.0.1:11434:11434"
     volumes:
       - ollama_data:/root/.ollama
     networks:
