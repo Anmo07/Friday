@@ -1,5 +1,5 @@
 import time
-from typing import Any, Dict, List, Optional, Callable
+from typing import Any, Dict, List, Optional
 from dataclasses import dataclass
 from enum import Enum
 

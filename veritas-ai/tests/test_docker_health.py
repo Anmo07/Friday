@@ -1,6 +1,5 @@
 import pytest
 import requests
-import asyncio
 import websockets
 import os
 

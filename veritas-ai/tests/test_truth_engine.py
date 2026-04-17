@@ -1,6 +1,5 @@
 import sys
 import os
-import pytest
 
 # Ensure our local modules are resolvable by pytest during independent CI checks
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

@@ -1,7 +1,6 @@
 import asyncio
 from typing import Optional, List, Tuple
 
-from neo4j import GraphDatabase
 from neo4j.async_driver import AsyncGraphDatabase, AsyncDriver
 from config.settings import settings
 import logging

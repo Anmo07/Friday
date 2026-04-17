@@ -7,7 +7,6 @@ from enum import Enum
 from typing import Dict, List, Optional, Callable, Awaitable, Any
 
 from cachetools import TTLCache
-from config.settings import settings
 from models.schemas import QueryResponse
 from core.redis_cache import redis_cache
 

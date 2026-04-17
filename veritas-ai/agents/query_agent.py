@@ -1,7 +1,6 @@
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
 from datetime import datetime
-import json
 from models.schemas import QueryResponse
 from models.llm import get_llm
 

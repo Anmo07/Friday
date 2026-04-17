@@ -24,7 +24,8 @@ class TruthEngine:
         social -> 0.30
         unknown -> 0.50
         """
-        if not sources: return 0.5
+        if not sources:
+            return 0.5
         
         scores = []
         for src in sources:
@@ -60,9 +61,12 @@ class TruthEngine:
         Checks if claim appears in internal memory boundaries (RAG + pending Knowledge Graph).
         """
         total_hits = rag_hits + kg_hits
-        if total_hits >= 3: return 1.0
-        if total_hits == 2: return 0.8
-        if total_hits == 1: return 0.5
+        if total_hits >= 3:
+            return 1.0
+        if total_hits == 2:
+            return 0.8
+        if total_hits == 1:
+            return 0.5
         return 0.2
 
     def calculate_bias_deviation(self, fake_news_probability: float) -> float:

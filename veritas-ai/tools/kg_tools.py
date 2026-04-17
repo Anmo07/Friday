@@ -1,6 +1,5 @@
 from langchain.tools import tool
 import json
-import asyncio
 from memory.knowledge_graph import AsyncKnowledgeGraph
 
 @tool("Knowledge Graph Entity Builder")
