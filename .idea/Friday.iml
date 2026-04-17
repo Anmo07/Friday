@@ -8,6 +8,9 @@
       <excludeFolder url="file://$MODULE_DIR$/veritas-ai/venv" />
       <excludeFolder url="file://$MODULE_DIR$/veritas-ai/frontend/node_modules" />
       <excludeFolder url="file://$MODULE_DIR$/veritas-ai/frontend/.next" />
+      <excludeFolder url="file://$MODULE_DIR$/.pytest_cache" />
+      <excludeFolder url="file://$MODULE_DIR$/.ruff_cache" />
+      <excludeFolder url="file://$MODULE_DIR$/.continue" />
     </content>
     <orderEntry type="jdk" jdkName="uv (Friday)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
