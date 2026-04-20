@@ -27,6 +27,7 @@ from models.schemas import (
     HistoryResponse,
     PredictiveTrendsResponse,
     QueryResponse,
+    QueryRequest,
     StreamAuthorizationResponse,
 )
 from pipelines.multi_agent_pipeline import (
@@ -35,7 +36,7 @@ from pipelines.multi_agent_pipeline import (
 )
 
 
-router = APIRouter(prefix=settings.API_V1_PREFIX)
+r = APIRouter(prefix=settings.API_V1_PREFIX)
 limiter = Limiter(key_func=get_remote_address)
 
 
@@ -133,7 +134,7 @@ async def fetch_global_alerts(request: Request, current_user: dict = Depends(get
 async def fetch_query_history(request: Request, limit: int = Query(default=25, ge=1, le=100), api_key: Optional[str] = Depends(api_key_header)):
     owner_email = "public"
     if api_key:
-        user = get_current_user(api_key, request)
+        user = await get_current_user(api_key)
         owner_email = user["owner"]
     items = await asyncio.to_thread(fetch_recent_history, limit, owner_email)
     return HistoryResponse(status="success", items=items)
