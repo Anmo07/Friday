@@ -1,11 +1,11 @@
 # --- BUILD STAGE ---
-FROM python:3.11-slim AS builder
+FROM python:3.11.9-slim-bookworm AS builder
 
 ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y \
     build-essential \
     libffi-dev \
     libssl-dev \
@@ -21,7 +21,7 @@ RUN pip install --user --upgrade pip && \
     pip install --user -r requirements.txt
 
 # --- FINAL STAGE ---
-FROM python:3.11-slim
+FROM python:3.11.9-slim-bookworm
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -33,7 +33,7 @@ RUN groupadd -g 1001 veritas && \
     useradd -u 1001 -g veritas -m -s /bin/bash veritas
 
 # System dependencies for audio, chromium, and ffmpeg
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y \
     curl \
     libportaudio2 \
     ffmpeg \
