@@ -39,16 +39,7 @@ router = APIRouter(prefix=settings.API_V1_PREFIX)
 limiter = Limiter(key_func=get_remote_address)
 
 
-class QueryRequest(BaseModel):
-    query: str = Field(min_length=1, max_length=2000)
 
-    @field_validator("query")
-    @classmethod
-    def clean_query(cls, value: str) -> str:
-        cleaned = " ".join(value.split())
-        if not cleaned:
-            raise ValueError("Query string cannot be empty.")
-        return cleaned
 
 
 class PerformanceMetrics(BaseModel):
