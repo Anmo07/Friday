@@ -213,8 +213,8 @@ async def clear_cache(request: Request, prefix: Optional[str] = None):
     }
 
 
-@router.websocket("/ws/analysis")
-async def websocket_analysis(websocket: WebSocket):
+@router.websocket("/ws/query")
+async def websocket_query(websocket: WebSocket):
     await websocket.accept()
     try:
         while True:
