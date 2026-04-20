@@ -52,9 +52,11 @@ export interface HistoryResponse {
 }
 
 export interface WebSocketMessage {
-  status: "idle" | "processing" | "complete" | "alert" | "error";
+  status: "idle" | "processing" | "running" | "complete" | "alert" | "error";
   data?: QueryResponse | AlertItem;
+  response?: QueryResponse; // New structure sends response
   message?: string;
+  stage?: string; // New structure sends stage
   progress?: number;
-  error?: { message: string };
+  error?: { message: string } | string; // Error could be a string directly
 }
