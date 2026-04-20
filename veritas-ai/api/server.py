@@ -2,7 +2,7 @@ import asyncio
 import time
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field, field_validator
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -30,13 +30,14 @@ from models.schemas import (
     QueryRequest,
     StreamAuthorizationResponse,
 )
-from pipelines.multi_agent_pipeline import (
-    run_multi_agent_pipeline,
-    run_fast_pipeline,
-)
+from pipelines.fast_pipeline import fast_pipeline
+from pipelines.deep_pipeline import deep_pipeline
+from voice.voice_manager import voice_manager
+from voice.voice_manager import voice_manager
+from voice.tts_engine import tts_engine, VOICE_PROFILES
 
 
-r = APIRouter(prefix=settings.API_V1_PREFIX)
+router = APIRouter(prefix=settings.API_V1_PREFIX)
 limiter = Limiter(key_func=get_remote_address)
 
 
@@ -49,22 +50,21 @@ class PerformanceMetrics(BaseModel):
     routing_decision: str
 
 
-async def _resolve_query(clean_query: str, owner_email: str = "public") -> tuple[QueryResponse, PerformanceMetrics]:
+async def _resolve_query(clean_query: str, deep: bool = False, owner_email: str = "public") -> tuple[QueryResponse, PerformanceMetrics]:
     """
-    Unified query resolution using the Smart Routing layer.
-    Phase 2 & 3: Handles caching and routing internally.
+    Unified query resolution using fast and deep pipelines.
     """
     start_time = time.time()
     
-    # Use the unified route_and_execute logic
-    response, routing_result = await route_and_execute(
-        query=clean_query,
-        fast_pipeline_fn=run_fast_pipeline,
-        full_pipeline_fn=run_multi_agent_pipeline
-    )
+    if deep:
+        response = await deep_pipeline(clean_query)
+        decision = "DEEP"
+    else:
+        response = await fast_pipeline(clean_query)
+        decision = "FAST"
     
     latency_ms = (time.time() - start_time) * 1000
-    cache_hit = (routing_result.decision == RoutingDecision.CACHE_HIT)
+    cache_hit = False
     
     # Log result asynchronously
     await asyncio.to_thread(log_query_result, response, owner_email)
@@ -73,7 +73,7 @@ async def _resolve_query(clean_query: str, owner_email: str = "public") -> tuple
     return response, PerformanceMetrics(
         latency_ms=latency_ms,
         cache_hit=cache_hit,
-        routing_decision=routing_result.decision.value
+        routing_decision=decision
     )
 
 
@@ -81,7 +81,7 @@ async def _resolve_query(clean_query: str, owner_email: str = "public") -> tuple
 @router.post("/query", response_model=QueryResponse)
 @limiter.limit("5/minute")
 async def query_endpoint(request: Request, body: QueryRequest):
-    response, _ = await _resolve_query(body.query)
+    response, _ = await _resolve_query(body.query, body.deep)
     return response
 
 
@@ -101,7 +101,7 @@ async def health_check():
 async def public_verify_news(
     request: Request, body: QueryRequest, current_user: dict = Depends(get_current_user)
 ):
-    response, _ = await _resolve_query(body.query, current_user["owner"])
+    response, _ = await _resolve_query(body.query, body.deep, current_user["owner"])
     return response
 
 
@@ -139,6 +139,16 @@ async def fetch_query_history(request: Request, limit: int = Query(default=25, g
     items = await asyncio.to_thread(fetch_recent_history, limit, owner_email)
     return HistoryResponse(status="success", items=items)
 
+
+class VoiceProfileRequest(BaseModel):
+    voice_id: str
+
+@router.post("/voice/set", tags=["Voice"])
+async def set_voice_profile(body: VoiceProfileRequest):
+    # Set the current voice in tts_engine and persist to redis
+    tts_engine.voice = VOICE_PROFILES.get(body.voice_id, tts_engine.voice)
+    await redis_cache.set("voice:current", body.voice_id, expire=86400)
+    return {"status": "success", "voice": tts_engine.voice}
 
 @router.post(
     "/feedback",
@@ -201,3 +211,74 @@ async def clear_cache(request: Request, prefix: Optional[str] = None):
         "status": "success",
         "message": f"Cache cleared for prefix: {prefix or 'all'}",
     }
+
+
+@router.websocket("/ws/analysis")
+async def websocket_analysis(websocket: WebSocket):
+    await websocket.accept()
+    try:
+        while True:
+            data = await websocket.receive_json()
+            query = data.get("query", "")
+            deep = data.get("deep", False)
+            
+            # Send initial progress state
+            await websocket.send_json({"stage": "Analyzing...", "status": "running"})
+            
+            # Run the query resolution
+            response, metrics = await _resolve_query(query, deep)
+            
+            # Send final response
+            await websocket.send_json({
+                "stage": "Result ready",
+                "status": "complete",
+                "response": response.model_dump(),
+                "metrics": metrics.model_dump()
+            })
+    except WebSocketDisconnect:
+        print("Analysis WebSocket disconnected")
+
+@router.websocket("/ws/voice")
+async def websocket_voice(websocket: WebSocket):
+    await websocket.accept()
+    try:
+        while True:
+            # We expect audio bytes from the client
+            audio_bytes = await websocket.receive_bytes()
+            
+            # Send immediate feedback that we're processing
+            await websocket.send_json({"stage": "Listening...", "status": "running"})
+            
+            # 1. Transcribe audio to text
+            query_text = await voice_manager.transcribe_audio(audio_bytes)
+            if not query_text:
+                await websocket.send_json({
+                    "stage": "Result ready", 
+                    "status": "error", 
+                    "error": "Could not hear audio."
+                })
+                continue
+                
+            await websocket.send_json({"stage": f"Transcribed: {query_text}", "status": "running"})
+            
+            # 2. Resolve query quickly (fast pipeline)
+            # Default to fast mode for voice to keep response time < 2s
+            response, _ = await _resolve_query(query_text, deep=False)
+            
+            # 3. Generate speech from summary
+            await websocket.send_json({"stage": "Generating voice...", "status": "running"})
+            speech_audio_bytes = await tts_engine.generate_speech(response.summary)
+            
+            # 4. Return results and audio back to client
+            # We send JSON with the text response, and audio bytes separately or encoded
+            # For simplicity, returning just audio bytes, or you can send a JSON payload 
+            # with base64 encoded audio. Let's send the text summary, then the audio binary.
+            await websocket.send_json({
+                "stage": "Result ready",
+                "status": "complete",
+                "response": response.model_dump()
+            })
+            await websocket.send_bytes(speech_audio_bytes)
+            
+    except WebSocketDisconnect:
+        print("Voice WebSocket disconnected")
