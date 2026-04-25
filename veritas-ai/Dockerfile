@@ -25,31 +25,17 @@ FROM python:3.11.9-slim-bookworm
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PATH=/home/veritas/.local/bin:$PATH \
-    PLAYWRIGHT_BROWSERS_PATH=/app/ms-playwright
+    PATH=/home/veritas/.local/bin:$PATH
 
 # Create a non-privileged user for security
 RUN groupadd -g 1001 veritas && \
     useradd -u 1001 -g veritas -m -s /bin/bash veritas
 
-# System dependencies for audio, chromium, and ffmpeg
+# System dependencies for audio and ffmpeg
 RUN apt-get update && apt-get upgrade -y && apt-get install -y \
     curl \
     libportaudio2 \
     ffmpeg \
-    libnss3 \
-    libatk1.0-0 \
-    libatk-bridge2.0-0 \
-    libcups2 \
-    libxcomposite1 \
-    libxrandr2 \
-    libxdamage1 \
-    libpango-1.0-0 \
-    libcairo2 \
-    libasound2 \
-    libgbm1 \
-    libgtk-3-0 \
-    libxshmfence1 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -59,14 +45,11 @@ COPY --from=builder /root/.local /home/veritas/.local
 RUN chown -R veritas:veritas /home/veritas/.local
 
 # Create necessary directories and set permissions
-RUN mkdir -p /app/data /app/chroma_db /app/logs /app/ms-playwright && \
+RUN mkdir -p /app/data /app/chroma_db /app/logs && \
     chown -R veritas:veritas /app
 
 USER veritas
 
-# Playwright/Chromium is optional (used only for web scraping tools)
-# Build continues even if download fails (e.g. network issues, air-gapped environments)
-RUN playwright install chromium || echo "WARNING: Playwright Chromium install failed - web scraping tools will be unavailable"
 
 # Copy application source
 COPY --chown=veritas:veritas . .
