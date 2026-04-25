@@ -42,7 +42,7 @@ export default function Home() {
       {/* Hero Section */}
       <section className="relative pt-32 pb-20 px-6">
         <div className="max-w-5xl mx-auto text-center relative z-10">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-sm font-medium mb-8 animate-fade-up">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-sm font-mono mb-8 animate-fade-up shadow-[0_0_15px_rgba(0,234,255,0.2)]">
             <Sparkles className="w-4 h-4" />
             AI-Powered Truth Intelligence Engine
           </div>
@@ -60,14 +60,14 @@ export default function Home() {
           <div className="flex items-center justify-center gap-4 animate-fade-up" style={{ animationDelay: "0.3s" }}>
             <Link
               href="/dashboard"
-              className="px-8 py-4 bg-gradient-to-r from-blue-600 to-blue-500 text-white font-semibold rounded-xl shadow-[0_0_30px_rgba(59,130,246,0.4)] hover:shadow-[0_0_40px_rgba(59,130,246,0.6)] transition-all duration-300 flex items-center gap-2"
+              className="px-8 py-4 bg-cyan-500/20 border border-cyan-500/50 text-cyan-400 font-mono font-bold uppercase tracking-wider rounded-xl shadow-[0_0_30px_rgba(0,234,255,0.4)] hover:shadow-[0_0_50px_rgba(0,234,255,0.6)] hover:bg-cyan-500/30 transition-all duration-300 flex items-center gap-2"
             >
               <Zap className="w-5 h-5" /> Launch Intelligence
               <ChevronRight className="w-4 h-4" />
             </Link>
             <Link
               href="/developers"
-              className="px-8 py-4 bg-white/5 border border-white/10 text-gray-300 font-semibold rounded-xl hover:bg-white/10 hover:text-white transition-all duration-300 flex items-center gap-2"
+              className="px-8 py-4 bg-purple-500/10 border border-purple-500/30 text-purple-400 font-mono font-bold uppercase tracking-wider rounded-xl hover:bg-purple-500/20 hover:shadow-[0_0_30px_rgba(168,85,247,0.3)] transition-all duration-300 flex items-center gap-2"
             >
               <Code2 className="w-5 h-5" /> Developer API
             </Link>
@@ -121,7 +121,7 @@ export default function Home() {
           <p className="text-gray-400 mb-8">Start verifying claims in seconds with our Siri-like voice interface.</p>
           <Link
             href="/dashboard"
-            className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-xl shadow-[0_0_30px_rgba(99,102,241,0.4)] hover:shadow-[0_0_40px_rgba(99,102,241,0.6)] transition-all"
+            className="inline-flex items-center gap-2 px-8 py-4 bg-cyan-500/20 border border-cyan-500/50 text-cyan-400 font-mono font-bold uppercase tracking-wider rounded-xl shadow-[0_0_30px_rgba(0,234,255,0.4)] hover:shadow-[0_0_50px_rgba(0,234,255,0.6)] hover:bg-cyan-500/30 transition-all"
           >
             <Zap className="w-5 h-5" /> Open Dashboard
           </Link>

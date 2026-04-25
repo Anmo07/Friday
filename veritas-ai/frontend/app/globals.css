@@ -3,18 +3,15 @@
 @tailwind utilities;
 
 :root {
-  --background: #050508;
+  --background: #020617;
   --foreground: #ededed;
-  --primary: #3b82f6;
-  --glow-primary: rgba(59, 130, 246, 0.15);
-}
-
-* { box-sizing: border-box; }
-
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --primary: #00eaff;
+  --glow-primary: rgba(0, 234, 255, 0.15);
+  --neon-cyan: #00eaff;
+  --neon-pink: #ec4899;
+  --neon-purple: #a855f7;
+  --dark-bg: #000000;
+  --darker-bg: #01030a;
 }
 
 /* Glassmorphism utility */
@@ -63,9 +60,9 @@ body {
 /* Subtle grid pattern */
 .grid-pattern {
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
-  background-size: 60px 60px;
+    linear-gradient(rgba(0, 234, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 234, 255, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
 }
 
 /* Smooth fade-in animation */
@@ -77,8 +74,146 @@ body {
   animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+/* Holographic scan lines */
+.holographic-scan {
+  position: relative;
+  overflow: hidden;
+}
+.holographic-scan::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(0, 255, 255, 0.1),
+    transparent
+  );
+  animation: scan 2s linear infinite;
+}
+@keyframes scan {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+/* Neon pulse animation */
+@keyframes neon-pulse {
+  0% { 
+    box-shadow: 0 0 5px var(--neon-cyan),
+                0 0 10px var(--neon-cyan),
+                0 0 15px var(--neon-cyan);
+  }
+  50% { 
+    box-shadow: 0 0 10px var(--neon-cyan),
+                0 0 20px var(--neon-cyan),
+                0 0 30px var(--neon-cyan);
+  }
+  100% { 
+    box-shadow: 0 0 5px var(--neon-cyan),
+                0 0 10px var(--neon-cyan),
+                0 0 15px var(--neon-cyan);
+  }
+}
+.neon-pulse {
+  animation: neon-pulse 2s ease-in-out infinite;
+}
+
+/* Orb pulse animation */
+@keyframes orb-pulse {
+  0% { transform: scale(0.95); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(0.95); }
+}
+.orb-pulse {
+  animation: orb-pulse 2s ease-in-out infinite;
+}
+
+/* Text typing animation */
+@keyframes typing {
+  from { width: 0; }
+  to { width: 100%; }
+}
+.typing-effect {
+  overflow: hidden;
+  white-space: nowrap;
+  border-right: 2px solid var(--neon-cyan);
+  width: 0;
+  animation: typing 3s steps(40, end) forwards;
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+
+/* Dark theme enhancements */
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  position: relative;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  top: 0; left: 0; width: 100vw; height: 100vh;
+  background: radial-gradient(circle at 50% 50%, rgba(168, 85, 247, 0.05) 0%, transparent 50%),
+              radial-gradient(circle at 80% 20%, rgba(0, 234, 255, 0.05) 0%, transparent 40%);
+  pointer-events: none;
+  z-index: -1;
+  animation: bgPulse 10s infinite alternate ease-in-out;
+}
+
+@keyframes bgPulse {
+  0% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+
+/* Override for darker sections */
+.dark-section {
+  background-color: var(--darker-bg);
+  border-color: rgba(255, 255, 255, 0.04);
+}
+
+/* Neon text */
+.neon-text {
+  text-shadow: 0 0 5px var(--neon-cyan),
+               0 0 10px var(--neon-cyan),
+               0 0 15px var(--neon-cyan);
+}
+
+/* Holographic button */
+.holographic-btn {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.3);
+}
+.holographic-btn::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    45deg,
+    transparent,
+    rgba(0, 255, 255, 0.1),
+    transparent
+  );
+  transform: rotate(45deg);
+  transition: all 0.5s;
+}
+.holographic-btn:hover::before {
+  animation: shine 0.5s;
+}
+@keyframes shine {
+  0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+  100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
+}
