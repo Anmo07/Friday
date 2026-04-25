@@ -30,10 +30,14 @@ from config.settings import settings
 from core.redis_cache import init_redis_cache, close_redis_cache
 from models.multi_llm import llm_manager
 from models.schemas import ErrorResponse
-from pipelines.multi_agent_pipeline import (
-    deploy_event_consumers,
-    shutdown_event_consumers,
-)
+try:
+    from pipelines.multi_agent_pipeline import (
+        deploy_event_consumers,
+        shutdown_event_consumers,
+    )
+except ImportError:
+    deploy_event_consumers = lambda: None
+    shutdown_event_consumers = lambda: None
 
 logger = logging.getLogger(__name__)
 

@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "Veritas AI"
     APP_ENV: str = "development"
     API_V1_PREFIX: str = "/api/v1"
+    LOG_LEVEL: str = "INFO"
 
     # ── Core runtime ─────────────────────────────────────────────
     PIPELINE_TIMEOUT_SECONDS: int = 300

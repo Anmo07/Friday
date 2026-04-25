@@ -6,7 +6,11 @@ from datetime import datetime
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 from dataclasses import dataclass, field
 
-from crewai import Crew, Task
+try:
+    from crewai import Crew, Task
+except ImportError:
+    Crew = None
+    Task = None
 
 from agents.veritas_agents import VeritasAgents
 from config.settings import settings
