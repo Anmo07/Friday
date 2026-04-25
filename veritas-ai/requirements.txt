@@ -38,3 +38,5 @@ numpy>=1.24.0
 faster-whisper>=1.0.0
 edge-tts>=6.1.13
 slowapi
+
+# Force cache invalidation 2
