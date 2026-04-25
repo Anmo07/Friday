@@ -22,7 +22,7 @@ export default function Navbar() {
             <Shield className="w-4 h-4 text-white" />
           </div>
           <span className="font-bold font-mono uppercase tracking-wider text-lg text-white">
-            Veritas<span className="text-cyan-400 text-shadow-[0_0_10px_rgba(0,234,255,0.5)]">AI</span>
+            Veritas<span className="text-cyan-400 neon-text">AI</span>
           </span>
         </Link>
 
