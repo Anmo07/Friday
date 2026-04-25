@@ -9,21 +9,19 @@ import { QueryResponse } from "@/types/api";
 const PROGRESS_STAGES = [
   { key: "cache_check", label: "Checking cache...", icon: Clock },
   { key: "routing", label: "Analyzing query...", icon: Brain },
+  { key: "processing", label: "Processing...", icon: Loader2 },
   { key: "data_collection", label: "Collecting data...", icon: Search },
-  { key: "parallel_agents", label: "Running parallel analysis...", icon: Zap },
   { key: "verification", label: "Verifying sources...", icon: Shield },
   { key: "fact_check", label: "Cross-referencing facts...", icon: CheckCircle2 },
-  { key: "misinformation", label: "Detecting misinformation...", icon: MessageSquareWarning },
   { key: "scoring", label: "Computing truth score...", icon: FileSearch },
+  { key: "generating", label: "Generating response...", icon: Zap },
   { key: "finalizing", label: "Finalizing response...", icon: Loader2 },
 ];
 
 export default function Dashboard() {
-  const { streamData, alerts, activeStatus, error, sendQuery } = useWebSocket(WS_BASE_URL);
+  const { streamData, alerts, activeStatus, error, progress, currentStage, sendQuery } = useWebSocket(WS_BASE_URL);
   const [query, setQuery] = useState("");
   const [isListening, setIsListening] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [currentStage, setCurrentStage] = useState<string>("");
   const recognitionRef = useRef<any>(null);
   const [lastSpokenSummary, setLastSpokenSummary] = useState<string>("");
   const sendQueryRef = useRef(sendQuery);
@@ -94,13 +92,11 @@ export default function Dashboard() {
 
   const handleExecute = useCallback(() => {
     if (!query.trim()) return;
-    setProgress(0);
-    setCurrentStage("");
     sendQuery(query);
   }, [query, sendQuery]);
 
   const payload: QueryResponse | null = streamData.length > 0 ? streamData[0] : null;
-  const isProcessing = activeStatus === "transmitting" || activeStatus === "processing" || activeStatus.startsWith("Verifying");
+  const isProcessing = activeStatus !== "idle" && activeStatus !== "complete" && activeStatus !== "error" && activeStatus !== "disconnected";
 
   useEffect(() => {
     if (payload && payload.summary && payload.summary !== lastSpokenSummary) {
@@ -240,6 +236,12 @@ export default function Dashboard() {
                 {payload.status === 'verified' ? <ShieldCheck className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
                 {payload.status}
               </div>
+
+              {payload._cached && (
+                <div className="px-3 py-1 rounded-full text-xs font-medium bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center gap-1">
+                  <Zap className="w-3 h-3" /> Cached
+                </div>
+              )}
 
               {payload.explanation && payload.explanation.confidence_breakdown && (
                 <div className="grid grid-cols-3 gap-2 w-full mt-6">
