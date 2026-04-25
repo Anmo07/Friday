@@ -1,3 +1,6 @@
+# NEW: app/ module is the clean rewrite. This file remains for backward compatibility.
+# To use the new module: uvicorn app.main:app
+# The code below is the LEGACY entry point.
 # NOTE: app/ is the new clean module structure. Full migration happens in Task 4.
 import logging
 from contextlib import asynccontextmanager
