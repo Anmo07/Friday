@@ -1,6 +1,6 @@
 services:
   # =============================================
-  # Backend — FastAPI + CrewAI + Friday System
+  # Backend — FastAPI + Veritas AI System
   # =============================================
   backend:
     build:

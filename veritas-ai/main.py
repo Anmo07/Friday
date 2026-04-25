@@ -1,3 +1,15 @@
+# =============================================================
+# NEW ARCHITECTURE: The clean rewrite lives in app/
+# Use: uvicorn app.main:app --host 0.0.0.0 --port 8000
+# The legacy code below is kept for reference only.
+# =============================================================
+
+# Re-export from new module for any code that imports from here
+try:
+    from app.main import app as new_app
+except ImportError:
+    new_app = None
+
 # NEW: app/ module is the clean rewrite. This file remains for backward compatibility.
 # To use the new module: uvicorn app.main:app
 # The code below is the LEGACY entry point.

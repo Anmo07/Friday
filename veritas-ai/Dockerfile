@@ -65,6 +65,7 @@ RUN mkdir -p /app/data /app/chroma_db /app/logs /app/ms-playwright && \
 USER veritas
 
 # Install Playwright browser (cached if requirements don't change)
+# Optional: only needed if web scraping tools are enabled at runtime
 RUN playwright install chromium
 
 # Copy application source
@@ -76,4 +77,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8000/api/v1/health || exit 1
 
 # Production server execution using uvicorn workers
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--limit-concurrency", "200"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2", "--limit-concurrency", "100"]

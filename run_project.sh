@@ -2,6 +2,9 @@
 # -------------------------------------------------------------
 # Project Setup & Execution Script for Veritas AI
 # -------------------------------------------------------------
+# NOTE: The clean rewrite lives in the app/ module.
+#       New entry point: uvicorn app.main:app
+#       Docker Compose handles everything automatically.
 
 echo "--- 🚀 Setting up Veritas AI ---"
 
