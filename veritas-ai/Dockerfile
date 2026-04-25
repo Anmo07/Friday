@@ -64,9 +64,9 @@ RUN mkdir -p /app/data /app/chroma_db /app/logs /app/ms-playwright && \
 
 USER veritas
 
-# Install Playwright browser (cached if requirements don't change)
-# Optional: only needed if web scraping tools are enabled at runtime
-RUN playwright install chromium
+# Playwright/Chromium is optional (used only for web scraping tools)
+# Build continues even if download fails (e.g. network issues, air-gapped environments)
+RUN playwright install chromium || echo "WARNING: Playwright Chromium install failed - web scraping tools will be unavailable"
 
 # Copy application source
 COPY --chown=veritas:veritas . .
