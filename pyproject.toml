@@ -12,7 +12,8 @@ dependencies = [
     "chromadb>=0.4.0",
     "playwright==1.44.0",
     "neo4j>=5.19.0",
-    "redis>=5.0.0"
+    "redis>=5.0.0",
+    "cachetools>=6.2.6",
 ]
 
 [tool.setuptools]
