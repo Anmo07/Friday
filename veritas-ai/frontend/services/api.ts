@@ -1,7 +1,7 @@
 const browserHostname = typeof window !== "undefined" ? window.location.hostname : "localhost";
 const browserProtocol = typeof window !== "undefined" && window.location.protocol === "https:" ? "https" : "http";
 const wsProtocol = browserProtocol === "https" ? "wss" : "ws";
-const backendPort = process.env.NEXT_PUBLIC_API_PORT || "8000";
+const backendPort = process.env.NEXT_PUBLIC_API_PORT || "8001";
 
 const normalizeApiBase = (value: string) => value.replace(/\/$/, "").replace(/\/api\/v1$/, "");
 

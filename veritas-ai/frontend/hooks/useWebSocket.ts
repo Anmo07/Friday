@@ -45,47 +45,22 @@ export const useWebSocket = (url: string): UseWebSocketReturn => {
           
           if (payload.status === "alert") {
             setAlerts((prev) => (payload.data ? [payload.data as AlertItem, ...prev] : prev));
-          } else if (payload.status === "processing" || payload.status === "running") {
+          } else if (payload.status === "processing") {
             const message = payload.message || payload.stage || "Processing...";
             setActiveStatus(message);
             isProcessingRef.current = true;
             
             if (payload.progress !== undefined) {
               setProgress(payload.progress);
-            } else {
-              // Synthetic progress based on stage
-              if (message.includes("Listening")) setProgress(10);
-              else if (message.includes("Analyzing")) setProgress(40);
-              else if (message.includes("Verifying")) setProgress(60);
-              else if (message.includes("Generating")) setProgress(85);
-              else setProgress((p) => Math.min(p + 15, 90));
             }
             
-            const stageMap: Record<string, string> = {
-              "Checking cache": "cache_check",
-              "Analyzing": "routing",
-              "Collecting data": "data_collection",
-              "Running parallel": "parallel_agents",
-              "Verifying": "verification",
-              "Cross-referencing": "fact_check",
-              "Detecting misinformation": "misinformation",
-              "Computing truth": "scoring",
-              "Finalizing": "finalizing",
-              "Generating": "finalizing",
-              "Cache hit": "complete",
-            };
-            
-            for (const [key, value] of Object.entries(stageMap)) {
-              if (message.toLowerCase().includes(key.toLowerCase())) {
-                setCurrentStage(value);
-                break;
-              }
+            if (payload.stage !== undefined) {
+              setCurrentStage(payload.stage);
             }
             
           } else if (payload.status === "complete") {
-            const resultData = payload.data || payload.response;
-            if (resultData) {
-              setStreamData((prev) => [resultData as QueryResponse, ...prev]);
+            if (payload.data) {
+              setStreamData((prev) => [payload.data as QueryResponse, ...prev]);
             }
             setActiveStatus("complete");
             setProgress(100);

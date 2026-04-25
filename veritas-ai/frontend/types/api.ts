@@ -28,6 +28,8 @@ export interface QueryResponse {
   status: "verified" | "likely_false" | "uncertain";
   explanation?: Explanation | null;
   timestamp: string;
+  _cached?: boolean;
+  latency_ms?: number;
 }
 
 export interface AlertItem {
@@ -52,11 +54,12 @@ export interface HistoryResponse {
 }
 
 export interface WebSocketMessage {
-  status: "idle" | "processing" | "running" | "complete" | "alert" | "error";
-  data?: QueryResponse | AlertItem;
-  response?: QueryResponse; // New structure sends response
-  message?: string;
-  stage?: string; // New structure sends stage
+  status: "processing" | "complete" | "alert" | "error";
+  stage?: string;
   progress?: number;
-  error?: { message: string } | string; // Error could be a string directly
+  message?: string;
+  data?: QueryResponse | AlertItem;
+  error?: { message: string } | string;
+  transcription?: string;
+  has_audio?: boolean;
 }
