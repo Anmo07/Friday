@@ -23,9 +23,13 @@ class ObservabilityCallbackHandler(BaseCallbackHandler):
     def on_llm_start(self, serialized: Dict[str, Any], prompts: List[str], **kwargs: Any) -> Any:
         run_id = kwargs.get("run_id")
         self.start_times[run_id] = time.time()
+        import logging
+        logging.getLogger(__name__).info(f"LLM request start: {run_id}")
 
     def on_llm_end(self, response: Any, **kwargs: Any) -> Any:
         run_id = kwargs.get("run_id")
+        import logging
+        logging.getLogger(__name__).info(f"LLM request end: {run_id}")
         end_time = time.time()
         start_time = self.start_times.pop(run_id, end_time)
         latency = end_time - start_time

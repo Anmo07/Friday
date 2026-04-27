@@ -17,3 +17,4 @@
 {"timestamp": "2026-04-25T18:16:13.463036+00:00", "type": "truth_computation", "truth_score": 0.5, "breakdown": {"source_authority": 0.5, "cross_source_agreement": 0.5, "temporal_consistency": 0.9, "claim_verifiability": 0.2, "bias_deviation": 0.5}}
 {"timestamp": "2026-04-27T04:57:47.405059+00:00", "type": "llm_inference", "latency_seconds": 17.7357, "prompt_tokens": 0, "completion_tokens": 0, "confidence_score": null}
 {"timestamp": "2026-04-27T06:55:48.939791+00:00", "type": "llm_inference", "latency_seconds": 6.2728, "prompt_tokens": 0, "completion_tokens": 0, "confidence_score": null}
+{"timestamp": "2026-04-27T07:40:37.003217+00:00", "type": "llm_inference", "latency_seconds": 5.61, "prompt_tokens": 0, "completion_tokens": 0, "confidence_score": null}

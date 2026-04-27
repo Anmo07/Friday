@@ -154,7 +154,12 @@ async def get_history(request: Request, limit: int = 50):
 
 @router.post("/feedback")
 async def submit_feedback(request: Request):
-    """Submit user feedback."""
+    """Submit user feedback (data collection only).
+    
+    TODO:
+    - dataset builder
+    - training pipeline
+    """
     try:
         body = await request.json()
         from feedback.feedback_service import UserFeedback, process_and_log_feedback

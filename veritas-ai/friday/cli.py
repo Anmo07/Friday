@@ -119,6 +119,8 @@ class FridayMenuApp(rumps.App):
         recognizer = sr.Recognizer()
         recognizer.energy_threshold = 300  # Set a low base threshold for sensitivity
         recognizer.dynamic_energy_threshold = True
+        recognizer.pause_threshold = 0.4  # Cut silence waiting time in half for faster response
+        recognizer.non_speaking_duration = 0.4
         
         try:
             with sr.Microphone() as source:
@@ -148,24 +150,63 @@ class FridayMenuApp(rumps.App):
 
     async def process_text(self, text: str):
         try:
+            from app.voice.tts import speak
             full_response = ""
+            current_sentence = ""
             print("FRIDAY:", end=" ", flush=True)
+            
+            # Queue for sequential audio playback
+            audio_queue = asyncio.Queue()
+            
+            async def audio_worker():
+                while True:
+                    sentence = await audio_queue.get()
+                    if sentence is None:  # Sentinel value to stop
+                        audio_queue.task_done()
+                        break
+                        
+                    if sentence.strip():
+                        audio_response = await speak(sentence.strip())
+                        if audio_response:
+                            with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
+                                tmp.write(audio_response)
+                                tmp_path = tmp.name
+                            # Play sequentially without blocking the event loop
+                            proc = await asyncio.create_subprocess_exec("afplay", tmp_path)
+                            await proc.wait()
+                            os.unlink(tmp_path)
+                            
+                    audio_queue.task_done()
+
+            # Start the worker task
+            worker_task = asyncio.create_task(audio_worker())
+            
             async for chunk in self.layer.process_query_stream(text):
                 print(chunk, end="", flush=True)
                 full_response += chunk
+                current_sentence += chunk
+                
+                # Check for sentence boundaries
+                if any(punct in current_sentence for punct in [". ", "! ", "? ", ".\n", "!\n", "?\n"]):
+                    for punct in [". ", "! ", "? ", ".\n", "!\n", "?\n"]:
+                        if punct in current_sentence:
+                            parts = current_sentence.split(punct, 1)
+                            sentence_to_speak = parts[0] + punct
+                            current_sentence = parts[1] if len(parts) > 1 else ""
+                            
+                            # Queue the sentence
+                            await audio_queue.put(sentence_to_speak)
+                            break
+                            
             print()
             
-            # Text to Speech
-            from app.voice.tts import speak
-            audio_response = await speak(full_response)
-            if audio_response:
-                with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
-                    tmp.write(audio_response)
-                    tmp_path = tmp.name
+            # Speak any remaining text
+            if current_sentence.strip():
+                await audio_queue.put(current_sentence)
                 
-                # Play audio using macOS built-in afplay
-                subprocess.Popen(["afplay", tmp_path]).wait()
-                os.unlink(tmp_path)
+            # Stop the worker
+            await audio_queue.put(None)
+            await worker_task
                 
         except Exception as e:
             print(f"\n[Error processing text]: {e}")

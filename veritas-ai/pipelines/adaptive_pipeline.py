@@ -179,7 +179,17 @@ async def run_adaptive_pipeline(
     agent_outputs: Dict[str, Any] = {}
 
     async def _run(coro, name: str):
-        result = await coro
+        from config.settings import settings
+        import logging
+        log = logging.getLogger(__name__)
+        start_time = time.time()
+        try:
+            result = await asyncio.wait_for(coro, timeout=settings.AGENT_TASK_TIMEOUT_SECONDS)
+        except asyncio.TimeoutError:
+            result = AgentResult(name, {"error": "timeout", "timed_out": True}, cached=False)
+        
+        exec_time = time.time() - start_time
+        log.info(f"Agent execution time: {name} took {exec_time:.2f}s")
         agent_outputs[name] = result.output
         if stream_callback:
             await stream_callback("agent_complete", name, result.to_dict())
@@ -221,11 +231,17 @@ async def run_adaptive_pipeline(
         if progress_callback:
             await progress_callback("parallel_agents", "Deep analysis...")
 
-        val_r, persp_r, contra_r = await asyncio.gather(
+        results = await asyncio.gather(
             _run(_validation_agent(normalized, retrieval.output), "validation_agent"),
             _run(_perspective_agent(normalized), "perspective_agent"),
             _run(_contradiction_agent(normalized, retrieval.output), "contradiction_agent"),
+            return_exceptions=True
         )
+        
+        # Handle exceptions gracefully
+        val_r = results[0] if not isinstance(results[0], Exception) else AgentResult("validation_agent", {"error": "failed"})
+        persp_r = results[1] if not isinstance(results[1], Exception) else AgentResult("perspective_agent", {"error": "failed"})
+        contra_r = results[2] if not isinstance(results[2], Exception) else AgentResult("contradiction_agent", {"error": "failed"})
 
         if progress_callback:
             await progress_callback("scoring", "Synthesizing...")

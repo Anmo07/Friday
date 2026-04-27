@@ -78,70 +78,38 @@ def classify_depth(query: str, force_deep: bool = False) -> DepthDecision:
     """
     normalized = " ".join(query.strip().split())
 
-    if force_deep:
-        return DepthDecision(
+    if force_deep or DEEP_TRIGGERS.search(normalized):
+        decision = DepthDecision(
             level=DepthLevel.DEEP,
-            reasoning="User explicitly requested deep analysis.",
+            reasoning="Deep trigger detected.",
             max_agents=5,
             max_sources=5,
             max_llm_calls=2,
         )
-
-    if DEEP_TRIGGERS.search(normalized):
-        return DepthDecision(
-            level=DepthLevel.DEEP,
-            reasoning="Query contains deep-analysis trigger words.",
-            max_agents=5,
-            max_sources=5,
-            max_llm_calls=2,
-        )
-
-    if ENHANCED_TRIGGERS.search(normalized):
-        return DepthDecision(
+        logger.info(f"Routing decision: {decision.level.name} - {decision.reasoning}")
+        return decision
+    
+    word_count = len(normalized.split())
+    if word_count <= 15:
+        decision = DepthDecision(
             level=DepthLevel.ENHANCED,
-            reasoning="Query requires verification/validation.",
+            reasoning="Word count <= 15.",
             max_agents=3,
             max_sources=4,
             max_llm_calls=2,
         )
-
-    if SIMPLE_PATTERNS.match(normalized):
-        word_count = len(normalized.split())
-        if word_count <= 10:
-            return DepthDecision(
-                level=DepthLevel.FAST,
-                reasoning="Simple factual query detected.",
-                max_agents=2,
-                max_sources=3,
-                max_llm_calls=1,
-            )
-
-    # Fallback: word count heuristic
-    word_count = len(normalized.split())
-    if word_count <= 8:
-        return DepthDecision(
+        logger.info(f"Routing decision: {decision.level.name} - {decision.reasoning}")
+        return decision
+    else:
+        decision = DepthDecision(
             level=DepthLevel.FAST,
-            reasoning="Short query — fast path.",
+            reasoning="Word count > 15.",
             max_agents=2,
             max_sources=3,
             max_llm_calls=1,
         )
-    elif word_count >= 20:
-        return DepthDecision(
-            level=DepthLevel.DEEP,
-            reasoning="Long, complex query detected.",
-            max_agents=5,
-            max_sources=5,
-            max_llm_calls=2,
-        )
-
-    return DepthDecision(
-        level=DepthLevel.ENHANCED,
-        reasoning="Moderate query complexity.",
-        max_agents=3,
-        max_sources=4,
-        max_llm_calls=2,
-    )
+        logger.info(f"Routing decision: {decision.level.name} - {decision.reasoning}")
+        return decision
 
 
 def detect_voice_command(query: str) -> Optional[str]:

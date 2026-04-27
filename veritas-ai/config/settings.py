@@ -18,9 +18,9 @@ class Settings(BaseSettings):
     API_V1_PREFIX: str = "/api/v1"
 
     # Core runtime
-    PIPELINE_TIMEOUT_SECONDS: int = int(os.getenv("PIPELINE_TIMEOUT_SECONDS", "300"))
+    PIPELINE_TIMEOUT_SECONDS: int = int(os.getenv("PIPELINE_TIMEOUT_SECONDS", "8"))
     AGENT_TASK_TIMEOUT_SECONDS: int = int(
-        os.getenv("AGENT_TASK_TIMEOUT_SECONDS", "120")
+        os.getenv("AGENT_TASK_TIMEOUT_SECONDS", "5")
     )
     CACHE_TTL_SECONDS: int = int(os.getenv("CACHE_TTL_SECONDS", "900"))
     CACHE_MAX_ENTRIES: int = int(os.getenv("CACHE_MAX_ENTRIES", "512"))
@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     )
     MODEL_NAME: str = os.getenv("MODEL_NAME", "llama3")
     ROUTER_MODEL: str = os.getenv("ROUTER_MODEL", "phi3")
-    FAST_MODEL: str = os.getenv("FAST_MODEL", "mistral")
+    FAST_MODEL: str = os.getenv("FAST_MODEL", "qwen2.5:0.5b")
 
     # Vector DB settings
     CHROMA_PERSIST_DIRECTORY: str = os.getenv("CHROMA_PERSIST_DIRECTORY", "./chroma_db")

@@ -24,7 +24,6 @@ Veritas AI is a production-grade, **asynchronous event-driven intelligence platf
 | **Hallucination Firewall** | Proprietary Logic | Intercepts agent outputs to prevent AI hallucinations and loops. |
 | **Predictive Trends** | Counter-Matrix Spike Detection | Identifies emerging misinformation waves *before* they go viral. |
 | **Knowledge Graph (KG)** | Neo4j + Graph Validation | Maps entity relationships to detect structural logical fallacies. |
-| **RLHF Feedback Loop** | Network Effect Builder | Aggregates user corrections into high-quality datasets for model fine-tuning. |
 | **Voice-First Interface** | Web Speech API | Seamless Siri-like interaction for hands-free truth verification. |
 | **Chrome Extension** | Manifest V3 | Real-time truth scoring for any text on the web. |
 
@@ -128,9 +127,6 @@ Veritas AI implements a custom evaluation layer that sits between the Agent Swar
 
 ### Predictive Intelligence
 The **Predictive Intelligence Engine** monitors global query clusters. By analyzing the velocity of specific keyword spikes (e.g., "election fraud", "vaccine leak"), it can flag astroturfed misinformation campaigns minutes before they saturate social networks.
-
-### RLHF & Network Effect
-The platform is designed to learn. Every user submission to the `/feedback` endpoint is processed by the **Network Effect Builder**, which periodically aggregates data into datasets for fine-tuning our localized LLMs.
 
 ---
 

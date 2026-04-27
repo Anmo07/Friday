@@ -73,13 +73,16 @@ class LRUTTLCache:
         entry = self._store.get(key)
         if entry is None:
             self._misses += 1
+            logger.info(f"Cache miss: {key}")
             return None
         if entry.is_expired:
             del self._store[key]
             self._misses += 1
+            logger.info(f"Cache miss (expired): {key}")
             return None
         self._store.move_to_end(key)
         self._hits += 1
+        logger.info(f"Cache hit: {key}")
         return entry.value
 
     def set(self, key: str, value: Any, ttl: int = 900) -> None:
