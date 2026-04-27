@@ -1,0 +1,12 @@
+{
+  "root": ".",
+  "venvPath": ".",
+  "venv": "venv",
+  "executionEnvironments": [
+    {
+      "root": ".",
+      "extraPaths": ["."]
+    }
+  ],
+  "reportMissingModuleSource": false
+}
