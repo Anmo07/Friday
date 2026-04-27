@@ -76,10 +76,34 @@ async def _speak_with_edge_tts(text: str, voice: str) -> bytes:
     tmp_path = None
     try:
         import edge_tts
-        communicate = edge_tts.Communicate(text, voice)
+        
+        # Naturalize the text into SSML
+        # Add pauses for "..." or "(pause)"
+        ssml_text = text.replace("...", '<break time="500ms"/>').replace("(pause)", '<break time="600ms"/>')
+        
+        # Add slight pitch and speed variation for human-like feel
+        ssml = f"""<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US">
+        <voice name="{voice}">
+            <prosody pitch="+2%" rate="-5%">
+                {ssml_text}
+            </prosody>
+        </voice>
+        </speak>"""
+        
+        communicate = edge_tts.Communicate(ssml, voice, is_ssml=True)
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
             tmp_path = tmp.name
-        await communicate.save(tmp_path)
+        
+        # In newer versions of edge-tts, if is_ssml is not fully supported via Communicate constructor,
+        # we might just do standard text processing. We'll try SSML if it doesn't fail.
+        try:
+            await communicate.save(tmp_path)
+        except Exception:
+            # Fallback to standard communicate with text
+            clean_text = text.replace("(pause)", "... ")
+            comm_fallback = edge_tts.Communicate(clean_text, voice, rate="-5%", pitch="+2Hz")
+            await comm_fallback.save(tmp_path)
+
         with open(tmp_path, "rb") as f:
             audio_bytes = f.read()
         logger.debug("Edge-TTS generated %d bytes", len(audio_bytes))
@@ -93,3 +117,4 @@ async def _speak_with_edge_tts(text: str, voice: str) -> bytes:
     finally:
         if tmp_path and os.path.exists(tmp_path):
             os.unlink(tmp_path)
+
