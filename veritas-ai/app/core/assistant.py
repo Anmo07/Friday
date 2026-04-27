@@ -3,20 +3,53 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import re
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Awaitable, Callable, Literal
 from urllib.parse import quote_plus, urlparse
 
-from app.pipeline.deep_pipeline import deep_pipeline
-from app.pipeline.fast_pipeline import fast_pipeline
 from app.core.web_enrichment import fetch_web_context, should_enrich
 from core.personality import friday_personality
 from system.control_engine import control_engine
 
 logger = logging.getLogger(__name__)
+
+
+def _debug_log(hypothesis_id: str, message: str, data: dict) -> None:
+    # #region agent log
+    try:
+        with open("/Users/anmol/Downloads/Developer/Friday/.cursor/debug-cf7383.log", "a", encoding="utf-8") as fp:
+            fp.write(
+                json.dumps(
+                    {
+                        "sessionId": "cf7383",
+                        "runId": "run1",
+                        "hypothesisId": hypothesis_id,
+                        "location": "app/core/assistant.py",
+                        "message": message,
+                        "data": data,
+                        "timestamp": int(time.time() * 1000),
+                    }
+                )
+                + "\n"
+            )
+    except Exception:
+        pass
+    # #endregion
+
+
+def _get_fast_pipeline():
+    from app.pipeline.fast_pipeline import fast_pipeline
+    return fast_pipeline
+
+
+def _get_deep_pipeline():
+    from app.pipeline.deep_pipeline import deep_pipeline
+    return deep_pipeline
 
 
 AssistantMode = Literal["assistant", "verification"]
@@ -269,11 +302,32 @@ class AssistantOrchestrator:
                 "Working on it...",
             )
 
-        response = (
-            await deep_pipeline(intent.normalized_query, progress_callback=progress_callback)
-            if intent.deep
-            else await fast_pipeline(intent.normalized_query, progress_callback=progress_callback)
-        )
+        try:
+            pipeline_callable = _get_deep_pipeline() if intent.deep else _get_fast_pipeline()
+            # #region agent log
+            _debug_log("H5", "pipeline_import_success", {"deep": intent.deep, "intent": intent.kind})
+            # #endregion
+        except Exception as exc:
+            # #region agent log
+            _debug_log(
+                "H5",
+                "pipeline_import_failure",
+                {"deep": intent.deep, "intent": intent.kind, "error": str(exc)},
+            )
+            # #endregion
+            return _build_assistant_response(
+                intent.normalized_query,
+                "A deep analysis dependency is unavailable in this runtime. "
+                "Please install project dependencies or run via Docker.",
+                mode=intent.mode,
+                intent=intent.kind,
+                status="uncertain",
+                confidence=0.35,
+                truth_score=0.35,
+                explanation={"dependency_error": str(exc)},
+            )
+
+        response = await pipeline_callable(intent.normalized_query, progress_callback=progress_callback)
         response["summary"] = friday_personality.polish_response(
             response.get("summary", ""),
             mode=intent.mode,

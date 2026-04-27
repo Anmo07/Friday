@@ -7,8 +7,11 @@ Fast startup target: < 3 seconds.
 - Heavy modules: lazy-loaded on first use
 """
 import asyncio
+import json
 import logging
+import os
 import time
+import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -21,11 +24,42 @@ from app.core.cache import cache
 
 logger = logging.getLogger(__name__)
 
+
+def _debug_log(hypothesis_id: str, message: str, data: dict) -> None:
+    # #region agent log
+    try:
+        with open("/Users/anmol/Downloads/Developer/Friday/.cursor/debug-cf7383.log", "a", encoding="utf-8") as fp:
+            fp.write(
+                json.dumps(
+                    {
+                        "sessionId": "cf7383",
+                        "runId": "run1",
+                        "hypothesisId": hypothesis_id,
+                        "location": "app/main.py",
+                        "message": message,
+                        "data": data,
+                        "timestamp": int(time.time() * 1000),
+                    }
+                )
+                + "\n"
+            )
+    except Exception:
+        pass
+    # #endregion
+
 # Configure logging
 logging.basicConfig(
     level=getattr(logging, settings.LOG_LEVEL, logging.INFO),
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
+
+# #region agent log
+_debug_log(
+    "H3",
+    "backend_import_bootstrap",
+    {"python_version": sys.version.split(" ")[0], "cwd": os.getcwd()},
+)
+# #endregion
 
 
 # ---- Startup / Shutdown ----

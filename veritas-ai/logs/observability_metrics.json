@@ -15,3 +15,4 @@
 {"timestamp": "2026-04-25T18:07:57.368630+00:00", "type": "truth_computation", "truth_score": 0.5, "breakdown": {"source_authority": 0.5, "cross_source_agreement": 0.5, "temporal_consistency": 0.9, "claim_verifiability": 0.2, "bias_deviation": 0.5}}
 {"timestamp": "2026-04-25T18:08:40.913565+00:00", "type": "truth_computation", "truth_score": 0.5, "breakdown": {"source_authority": 0.5, "cross_source_agreement": 0.5, "temporal_consistency": 0.9, "claim_verifiability": 0.2, "bias_deviation": 0.5}}
 {"timestamp": "2026-04-25T18:16:13.463036+00:00", "type": "truth_computation", "truth_score": 0.5, "breakdown": {"source_authority": 0.5, "cross_source_agreement": 0.5, "temporal_consistency": 0.9, "claim_verifiability": 0.2, "bias_deviation": 0.5}}
+{"timestamp": "2026-04-27T04:57:47.405059+00:00", "type": "llm_inference", "latency_seconds": 17.7357, "prompt_tokens": 0, "completion_tokens": 0, "confidence_score": null}
