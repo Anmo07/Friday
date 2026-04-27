@@ -231,6 +231,14 @@ except ImportError:
     limiter = None
 
 
+# ---- Root Route ----
+
+@app.get("/")
+async def root_redirect():
+    """Root endpoint to prevent 404 on base URL."""
+    return {"status": "ok", "service": "Veritas AI Backend", "docs_url": "/docs"}
+
+
 # ---- Mount Routers ----
 # Import routes AFTER app creation to avoid circular imports
 
