@@ -13,7 +13,7 @@ import hashlib
 import logging
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from models.schemas import QueryResponse, Source
@@ -239,9 +239,9 @@ async def run_adaptive_pipeline(
         )
         
         # Handle exceptions gracefully
-        val_r = results[0] if not isinstance(results[0], Exception) else AgentResult("validation_agent", {"error": "failed"})
-        persp_r = results[1] if not isinstance(results[1], Exception) else AgentResult("perspective_agent", {"error": "failed"})
-        contra_r = results[2] if not isinstance(results[2], Exception) else AgentResult("contradiction_agent", {"error": "failed"})
+        val_r = results[0] if not isinstance(results[0], BaseException) else AgentResult("validation_agent", {"error": "failed"})
+        persp_r = results[1] if not isinstance(results[1], BaseException) else AgentResult("perspective_agent", {"error": "failed"})
+        contra_r = results[2] if not isinstance(results[2], BaseException) else AgentResult("contradiction_agent", {"error": "failed"})
 
         if progress_callback:
             await progress_callback("scoring", "Synthesizing...")
@@ -279,7 +279,7 @@ async def run_adaptive_pipeline(
         confidence_score=round(truth_score * 0.9, 3),
         truth_score=round(truth_score, 3),
         status=status,
-        timestamp=datetime.utcnow().isoformat() + "Z",
+        timestamp=datetime.now(timezone.utc).isoformat(),
     )
 
     # Cache for future instant hits

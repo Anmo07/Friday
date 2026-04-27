@@ -213,7 +213,7 @@ class AssistantOrchestrator:
             return AssistantIntent(
                 raw_query=query,
                 normalized_query=normalized,
-                mode="verification",
+                mode="assistant",
                 kind="news",
                 deep=True,
                 opening_line=friday_personality.acknowledgement("news"),
@@ -426,13 +426,18 @@ class AssistantOrchestrator:
         feed = feedparser.parse(rss_url)
         items: list[dict] = []
         for entry in feed.entries[:5]:
-            title = re.sub(r"\s*-\s*[^-]+$", "", entry.get("title", "")).strip()
+            title_raw = str(entry.get("title", ""))
+            title = re.sub(r"\s*-\s*[^-]+$", "", title_raw).strip()
+            
+            source_raw = entry.get("source")
+            source_title = source_raw.get("title", "") if isinstance(source_raw, dict) else ""
+            
             items.append(
                 {
-                    "title": title or entry.get("title", ""),
-                    "url": entry.get("link", ""),
-                    "published": entry.get("published", ""),
-                    "source": entry.get("source", {}).get("title", ""),
+                    "title": title or title_raw,
+                    "url": str(entry.get("link", "")),
+                    "published": str(entry.get("published", "")),
+                    "source": source_title,
                 }
             )
         return items

@@ -19,6 +19,7 @@ async def test_websocket_health():
     """ Tests the Event-Driven Engine bounds mappings over WebSocket natively perfectly. """
     try:
         async with websockets.connect(WS_URL) as websocket:
+            _ = await websocket.recv() # consume the connection greeting
             await websocket.send('{"query": " "}')
             response = await websocket.recv()
             assert '"status": "error"' in response or '"status":"error"' in response

@@ -1,5 +1,5 @@
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Iterable, List, Optional
 from urllib.parse import urlparse
 
@@ -140,5 +140,5 @@ def build_query_response(query: str, report: str) -> QueryResponse:
         confidence_score=confidence_score,
         truth_score=truth_result["truth_score"],
         status="uncertain",
-        timestamp=datetime.utcnow().isoformat() + "Z",
+        timestamp=datetime.now(timezone.utc).isoformat(),
     )

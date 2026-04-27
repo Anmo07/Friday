@@ -40,10 +40,15 @@ class ObservabilityCallbackHandler(BaseCallbackHandler):
         prompt_tokens = token_usage.get("prompt_tokens", 0)
         completion_tokens = token_usage.get("completion_tokens", 0)
         
-        confidence = None
+        confidence = 0.0
         if hasattr(response, "generations") and len(response.generations) > 0 and len(response.generations[0]) > 0:
             gen_info = response.generations[0][0].generation_info or {}
-            confidence = gen_info.get("confidence")
+            val = gen_info.get("confidence")
+            if val is not None:
+                try:
+                    confidence = float(val)
+                except (ValueError, TypeError):
+                    confidence = 0.0
 
         observability.log_llm_metrics(
             latency=latency,
