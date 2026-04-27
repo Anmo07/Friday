@@ -1,42 +1,31 @@
-"""Deep pipeline: comprehensive analysis with extended validation."""
+"""Deep pipeline: multi-perspective multi-agent analysis."""
 import asyncio
 import logging
 from typing import Dict, Optional, Callable
-
-from app.agents.retrieval import retrieval_agent
-from app.agents.validation import validation_agent
-from app.agents.response import response_agent
+from agents.multi_perspective.orchestrator import MultiPerspectiveOrchestrator
+from models.schemas import QueryResponse
 
 logger = logging.getLogger(__name__)
-
 
 async def deep_pipeline(
     query: str, progress_callback: Optional[Callable] = None
 ) -> Dict:
     """
-    Run deep analysis pipeline.
-    First retrieves sources, then validates with source context.
-    More thorough than fast_pipeline — retrieval informs validation.
+    Run deep analysis pipeline using the MultiPerspectiveOrchestrator.
+    Implements Phase 1 and 2 of the system transformation.
     """
     if progress_callback:
-        await progress_callback("processing", "Starting deep analysis...")
+        await progress_callback("processing", "Activating Control Room Mode...")
 
-    # Phase 1: Retrieve sources first
+    orchestrator = MultiPerspectiveOrchestrator()
+    
+    # We can pass progress updates inside if we want, but for now just run it
+    response_model: QueryResponse = await orchestrator.run(query)
+    
+    # Convert model to dict for the API
+    response = response_model.dict()
+    
     if progress_callback:
-        await progress_callback("data_collection", "Collecting sources...")
-    retrieval_data = await retrieval_agent(query)
-
-    # Phase 2: Validate with source context (validation uses retrieval results)
-    if progress_callback:
-        await progress_callback("verification", "Validating claims...")
-    validation_data = await validation_agent(query, sources=retrieval_data)
-
-    # Phase 3: Build response
-    if progress_callback:
-        await progress_callback("generating", "Building comprehensive response...")
-    response = await response_agent(query, [retrieval_data, validation_data])
-
-    if progress_callback:
-        await progress_callback("complete", "Deep analysis complete")
+        await progress_callback("complete", "Multi-agent analysis complete, Boss.")
 
     return response

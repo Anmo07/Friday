@@ -2,11 +2,15 @@ from typing import Any, Dict, List
 import time
 from langchain_core.globals import set_llm_cache
 from langchain_community.cache import SQLiteCache
-from langchain_community.llms import Ollama
 from langchain_core.callbacks.base import BaseCallbackHandler
 
 from config.settings import settings
 from core.observability import observability
+from models.ollama_runtime import (
+    OllamaLLM,
+    create_ollama_llm,
+    require_model_name,
+)
 
 class ObservabilityCallbackHandler(BaseCallbackHandler):
     """
@@ -47,14 +51,17 @@ class ObservabilityCallbackHandler(BaseCallbackHandler):
 # Phase 9: Assign a persistent identical-query cache across all Agent logic mapping LLMs
 set_llm_cache(SQLiteCache(database_path=".veritas_llm_cache.db"))
 
-def get_llm() -> Ollama:
+def get_llm() -> OllamaLLM:
     """
     Initialize and return the base LLM for Veritas AI agents.
     Defaulting to Ollama pointing to local Ollama instance.
     """
-    return Ollama(
-        base_url=settings.OLLAMA_BASE_URL,
-        model=settings.MODEL_NAME,
+    return create_ollama_llm(
+        model=require_model_name(
+            [settings.MODEL_NAME, settings.FAST_MODEL, settings.ROUTER_MODEL],
+            base_url=settings.OLLAMA_BASE_URL,
+        ),
         temperature=0.0,
-        callbacks=[ObservabilityCallbackHandler()]
+        callbacks=[ObservabilityCallbackHandler()],
+        base_url=settings.OLLAMA_BASE_URL,
     )

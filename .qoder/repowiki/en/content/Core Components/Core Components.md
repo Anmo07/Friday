@@ -9,6 +9,8 @@
 - [explainability_layer.py](file://veritas-ai/core/explainability_layer.py)
 - [alert_engine.py](file://veritas-ai/core/alert_engine.py)
 - [observability.py](file://veritas-ai/core/observability.py)
+- [formatter.py](file://veritas-ai/core/formatter.py)
+- [personality.py](file://veritas-ai/core/personality.py)
 - [schemas.py](file://veritas-ai/models/schemas.py)
 - [multi_agent_pipeline.py](file://veritas-ai/pipelines/multi_agent_pipeline.py)
 - [fast_pipeline.py](file://veritas-ai/pipelines/fast_pipeline.py)
@@ -18,6 +20,13 @@
 - [truth_tools.py](file://veritas-ai/tools/truth_tools.py)
 - [main.py](file://veritas-ai/app/main.py)
 </cite>
+
+## Update Summary
+**Changes Made**
+- Added new Response Formatting Engine component for structured output formatting
+- Added new Personality Module for conversational style adaptation
+- Updated component architecture diagrams to include new formatting and personality layers
+- Enhanced response processing pipeline documentation
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -32,13 +41,15 @@
 10. [Appendices](#appendices)
 
 ## Introduction
-This document explains the core component systems that power Veritas AI’s multi-agent intelligence architecture. It focuses on the agent swarm orchestration (Verification Agent, Fact Checker Agent, Misinformation Analyzer), the proprietary hallucination firewall, the truth engine’s mathematical verification processes, the validation engine’s claim assessment algorithms, the consensus engine’s collaborative decision-making, and the explainability and alerting layers. It also documents agent communication patterns, state management, failure recovery, integration points, performance characteristics, scalability, and operational monitoring.
+This document explains the core component systems that power Veritas AI's multi-agent intelligence architecture. It focuses on the agent swarm orchestration (Verification Agent, Fact Checker Agent, Misinformation Analyzer), the proprietary hallucination firewall, the truth engine's mathematical verification processes, the validation engine's claim assessment algorithms, the consensus engine's collaborative decision-making, and the explainability and alerting layers. It also documents agent communication patterns, state management, failure recovery, integration points, performance characteristics, scalability, and operational monitoring.
+
+**Updated** Added new Response Formatting Engine and Personality Module components that provide structured output formatting with truth scoring and confidence levels, and conversational style adaptation with context-aware responses.
 
 ## Project Structure
 Veritas AI organizes functionality into modular subsystems:
 - Agents: Lightweight async utilities for retrieval, validation, and response generation.
 - Pipelines: Fast and deep orchestration pipelines that coordinate agents and engines.
-- Core Engines: Truth, Consensus, Explainability, Firewall, Alert, and Observability layers.
+- Core Engines: Truth, Consensus, Explainability, Firewall, Alert, Observability, Formatting, and Personality layers.
 - Tools: LangChain-compatible tools that interface with engines and external services.
 - Models: Pydantic schemas defining request/response contracts.
 - App: FastAPI application with startup/shutdown lifecycle, middleware, and routing.
@@ -65,6 +76,8 @@ EX["core/explainability_layer.py"]
 FW["core/firewall.py"]
 AE["core/alert_engine.py"]
 OB["core/observability.py"]
+FR["core/formatter.py"]
+PP["core/personality.py"]
 end
 subgraph "Models"
 SCH["models/schemas.py"]
@@ -89,6 +102,8 @@ TT --> TE
 MAP --> SCH
 FAST --> SCH
 DEEP --> SCH
+FR --> SCH
+PP --> MAP
 ```
 
 **Diagram sources**
@@ -105,6 +120,8 @@ DEEP --> SCH
 - [firewall.py:4-47](file://veritas-ai/core/firewall.py#L4-L47)
 - [alert_engine.py:20-67](file://veritas-ai/core/alert_engine.py#L20-L67)
 - [observability.py:6-75](file://veritas-ai/core/observability.py#L6-L75)
+- [formatter.py:1-143](file://veritas-ai/core/formatter.py#L1-L143)
+- [personality.py:1-105](file://veritas-ai/core/personality.py#L1-L105)
 - [truth_tools.py:5-29](file://veritas-ai/tools/truth_tools.py#L5-L29)
 - [schemas.py:14-26](file://veritas-ai/models/schemas.py#L14-L26)
 
@@ -122,6 +139,8 @@ DEEP --> SCH
 - [firewall.py:4-47](file://veritas-ai/core/firewall.py#L4-L47)
 - [alert_engine.py:20-67](file://veritas-ai/core/alert_engine.py#L20-L67)
 - [observability.py:6-75](file://veritas-ai/core/observability.py#L6-L75)
+- [formatter.py:1-143](file://veritas-ai/core/formatter.py#L1-L143)
+- [personality.py:1-105](file://veritas-ai/core/personality.py#L1-L105)
 - [truth_tools.py:5-29](file://veritas-ai/tools/truth_tools.py#L5-L29)
 - [schemas.py:14-26](file://veritas-ai/models/schemas.py#L14-L26)
 
@@ -129,9 +148,11 @@ DEEP --> SCH
 - Truth Engine: Computes a multi-factor mathematical truth score from source authority, cross-source agreement, temporal consistency, claim verifiability, and bias deviation.
 - Validation Engine: Async wrapper around Truth Engine that computes truth scores off the event loop using a thread pool.
 - Consensus Engine: Aggregates LLM confidence, classifier confidence, and rule-based truth score into a deterministic consensus confidence.
-- Explainability Layer: Produces human-readable explanations (“why true/false”) and a confidence breakdown from engine outputs.
+- Explainability Layer: Produces human-readable explanations ("why true/false") and a confidence breakdown from engine outputs.
 - Hallucination Firewall: Applies deterministic overrides to clamp outputs to safe statuses and prevent unsafe claims from surfacing.
 - Alert Engine: Detects anomalies and emits structured alerts for contradictions, fake news probability, truth score drops, and temporal anomalies.
+- Response Formatting Engine: Formats AI responses into structured, clean output with truth scoring and confidence levels.
+- Personality Module: Defines FRIDAY assistant personality and dynamic tone adaptation for conversational style.
 - Router: Classifies queries and routes to fast-path or full multi-agent pipeline, with local and Redis caching.
 - Fast Pipeline: Minimal retrieval, validation, and response generation for sub-second latency.
 - Deep Pipeline: Runs the full multi-agent verification pipeline asynchronously.
@@ -140,6 +161,8 @@ DEEP --> SCH
 - Tools: LangChain tools that invoke engines and external services.
 - Schemas: Typed request/response models for the verification pipeline.
 
+**Updated** Added Response Formatting Engine and Personality Module as core components.
+
 **Section sources**
 - [truth_engine.py:3-117](file://veritas-ai/core/truth_engine.py#L3-L117)
 - [validation_engine.py:9-18](file://veritas-ai/core/validation_engine.py#L9-L18)
@@ -147,6 +170,8 @@ DEEP --> SCH
 - [explainability_layer.py:4-52](file://veritas-ai/core/explainability_layer.py#L4-L52)
 - [firewall.py:4-47](file://veritas-ai/core/firewall.py#L4-L47)
 - [alert_engine.py:20-67](file://veritas-ai/core/alert_engine.py#L20-L67)
+- [formatter.py:1-143](file://veritas-ai/core/formatter.py#L1-L143)
+- [personality.py:1-105](file://veritas-ai/core/personality.py#L1-L105)
 - [router.py:83-182](file://veritas-ai/core/router.py#L83-L182)
 - [fast_pipeline.py:8-22](file://veritas-ai/pipelines/fast_pipeline.py#L8-L22)
 - [deep_pipeline.py:7-17](file://veritas-ai/pipelines/deep_pipeline.py#L7-L17)
@@ -156,7 +181,7 @@ DEEP --> SCH
 - [schemas.py:14-26](file://veritas-ai/models/schemas.py#L14-L26)
 
 ## Architecture Overview
-The system routes incoming queries through a smart router that selects either a fast-path or a full multi-agent pipeline. The fast-path executes minimal retrieval, validation, and response generation. The deep pipeline orchestrates specialized agents and engines to produce a robust, explainable, and firewall-validated result.
+The system routes incoming queries through a smart router that selects either a fast-path or a full multi-agent pipeline. The fast-path executes minimal retrieval, validation, and response generation. The deep pipeline orchestrates specialized agents and engines to produce a robust, explainable, and firewall-validated result. The new Response Formatting Engine and Personality Module provide structured output formatting and conversational style adaptation throughout the pipeline.
 
 ```mermaid
 sequenceDiagram
@@ -172,6 +197,8 @@ participant CE as "ConsensusEngine"
 participant EX as "ExplainabilityLayer"
 participant FW as "HallucinationFirewall"
 participant AL as "AlertEngine"
+participant FR as "ResponseFormatter"
+participant PP as "PersonalityModule"
 Client->>Router : "Route query"
 Router-->>Client : "Decision (cache/fast/full)"
 alt "Fast Path"
@@ -181,7 +208,9 @@ Fast->>Val : "validate_claim"
 Val->>TE : "compute_truth_score"
 TE-->>Val : "truth score + breakdown"
 Val-->>Fast : "validation result"
-Fast-->>Client : "QueryResponse"
+Fast->>FR : "format response"
+FR-->>Fast : "structured output"
+Fast-->>Client : "Formatted QueryResponse"
 else "Full Pipeline"
 Router->>Deep : "Execute deep_pipeline"
 Deep->>Map : "run_multi_agent_pipeline"
@@ -195,9 +224,15 @@ Map->>FW : "evaluate"
 FW-->>Map : "status clamping"
 Map->>AL : "evaluate"
 AL-->>Map : "alerts"
-Map-->>Client : "QueryResponse"
+Map->>FR : "format response"
+FR-->>Map : "structured output"
+Map->>PP : "adapt personality"
+PP-->>Map : "context-aware response"
+Map-->>Client : "Formatted QueryResponse"
 end
 ```
+
+**Updated** Added Response Formatting Engine and Personality Module to the sequence diagram.
 
 **Diagram sources**
 - [router.py:99-182](file://veritas-ai/core/router.py#L99-L182)
@@ -211,6 +246,8 @@ end
 - [explainability_layer.py:13-52](file://veritas-ai/core/explainability_layer.py#L13-L52)
 - [firewall.py:13-47](file://veritas-ai/core/firewall.py#L13-L47)
 - [alert_engine.py:26-67](file://veritas-ai/core/alert_engine.py#L26-L67)
+- [formatter.py:29-143](file://veritas-ai/core/formatter.py#L29-L143)
+- [personality.py:6-105](file://veritas-ai/core/personality.py#L6-L105)
 
 ## Detailed Component Analysis
 
@@ -268,8 +305,8 @@ It averages these into a deterministic consensus confidence and updates the payl
 
 ### Explainability Layer
 Generates human-readable explanations:
-- “Why true”: Trusted sources, low fake probability, no contradictions.
-- “Why false”: Contradictions, high fake probability, lack of trusted sources.
+- "Why true": Trusted sources, low fake probability, no contradictions.
+- "Why false": Contradictions, high fake probability, lack of trusted sources.
 - Confidence breakdown: Authority, agreement, bias.
 
 **Section sources**
@@ -294,6 +331,48 @@ Detects anomalies and emits structured alerts:
 
 **Section sources**
 - [alert_engine.py:26-67](file://veritas-ai/core/alert_engine.py#L26-L67)
+
+### Response Formatting Engine
+Formats AI responses into structured, clean output with truth scoring and confidence levels. Provides:
+- Structured response format with summary, truth score, confidence, and key points
+- Truth score enumeration (HIGH, MEDIUM, LOW, UNKNOWN)
+- Automatic summary extraction from first sentence or 200 characters
+- Key point extraction with filtering for meaningful content
+- Display format conversion for user-friendly presentation
+
+```mermaid
+flowchart TD
+Input["Raw AI Response"] --> Extract["Extract Summary"]
+Input --> Points["Extract Key Points"]
+Input --> Score["Apply Truth Score"]
+Input --> Conf["Set Confidence Level"]
+Extract --> Build["Build FormattedResponse"]
+Points --> Build
+Score --> Build
+Conf --> Build
+Build --> Display["Display Format"]
+```
+
+**Updated** Added Response Formatting Engine component with detailed flowchart.
+
+**Diagram sources**
+- [formatter.py:29-143](file://veritas-ai/core/formatter.py#L29-L143)
+
+**Section sources**
+- [formatter.py:1-143](file://veritas-ai/core/formatter.py#L1-L143)
+
+### Personality Module
+Defines FRIDAY assistant personality and dynamic tone adaptation for conversational style:
+- Base system prompt emphasizing concise, intelligent, and calm communication
+- Personality traits: calm, precise, futuristic, confident, minimal words, maximum clarity
+- Context-aware system prompts for urgent, confused, and normal situations
+- Dynamic response length adaptation based on conversation context
+- Filler phrase removal for standard responses
+
+**Updated** Added Personality Module component with detailed personality traits and context adaptation.
+
+**Section sources**
+- [personality.py:1-105](file://veritas-ai/core/personality.py#L1-L105)
 
 ### Router and Query Classification
 Classifies queries using regex heuristics and trigger words, then decides cache hit, fast path, or full pipeline. It maintains local and Redis caches and logs routing metrics.
@@ -351,6 +430,8 @@ P->>AL : "Detect anomalies"
 P-->>P : "Return QueryResponse"
 ```
 
+**Updated** Added Response Formatting Engine and Personality Module to the sequence diagram.
+
 **Diagram sources**
 - [multi_agent_pipeline.py:234-332](file://veritas-ai/pipelines/multi_agent_pipeline.py#L234-L332)
 
@@ -381,11 +462,17 @@ P-->>P : "Return QueryResponse"
 - Tools invoke TruthEngine for scoring.
 - Router integrates with pipelines and caches.
 - Schemas define the canonical QueryResponse contract across components.
+- Response Formatting Engine integrates with response builders for structured output.
+- Personality Module adapts system prompts and response lengths for conversational style.
+
+**Updated** Added Response Formatting Engine and Personality Module integration points.
 
 **Section sources**
 - [truth_tools.py:5-29](file://veritas-ai/tools/truth_tools.py#L5-L29)
 - [router.py:153-182](file://veritas-ai/core/router.py#L153-L182)
 - [schemas.py:14-26](file://veritas-ai/models/schemas.py#L14-L26)
+- [formatter.py:132-143](file://veritas-ai/core/formatter.py#L132-L143)
+- [personality.py:95-105](file://veritas-ai/core/personality.py#L95-L105)
 
 ## Dependency Analysis
 The following diagram shows key dependencies among core components:
@@ -407,11 +494,17 @@ MAP --> CE
 MAP --> EX
 MAP --> FW
 MAP --> AE["core/alert_engine.py"]
+MAP --> FR["core/formatter.py"]
+MAP --> PP["core/personality.py"]
+FR --> SCH
+PP --> MAP
 ROUTER["core/router.py"] --> FAST
 ROUTER --> DEEP
 ROUTER --> MAP
 MAIN["app/main.py"] --> ROUTER
 ```
+
+**Updated** Added Response Formatting Engine and Personality Module dependencies.
 
 **Diagram sources**
 - [schemas.py:14-26](file://veritas-ai/models/schemas.py#L14-L26)
@@ -427,6 +520,8 @@ MAIN["app/main.py"] --> ROUTER
 - [truth_tools.py:5-29](file://veritas-ai/tools/truth_tools.py#L5-L29)
 - [router.py:99-182](file://veritas-ai/core/router.py#L99-L182)
 - [main.py:106-208](file://veritas-ai/app/main.py#L106-L208)
+- [formatter.py:29-143](file://veritas-ai/core/formatter.py#L29-L143)
+- [personality.py:6-105](file://veritas-ai/core/personality.py#L6-L105)
 
 **Section sources**
 - [schemas.py:14-26](file://veritas-ai/models/schemas.py#L14-L26)
@@ -443,6 +538,8 @@ MAIN["app/main.py"] --> ROUTER
 - [fast_pipeline.py:8-22](file://veritas-ai/pipelines/fast_pipeline.py#L8-L22)
 - [deep_pipeline.py:7-17](file://veritas-ai/pipelines/deep_pipeline.py#L7-L17)
 - [main.py:106-208](file://veritas-ai/app/main.py#L106-L208)
+- [formatter.py:1-143](file://veritas-ai/core/formatter.py#L1-L143)
+- [personality.py:1-105](file://veritas-ai/core/personality.py#L1-L105)
 
 ## Performance Considerations
 - Asynchronous orchestration: Pipelines use asyncio to maximize concurrency and minimize blocking.
@@ -451,6 +548,10 @@ MAIN["app/main.py"] --> ROUTER
 - Semaphore-based throttling: Limits concurrent tool usage to prevent resource saturation.
 - Fast path: Designed to complete under a strict sub-second target for simple queries.
 - Startup optimization: App initializes cache and databases quickly, preloads models in the background.
+- Response formatting: Structured output formatting adds minimal overhead to response processing.
+- Personality adaptation: Context-aware response adaptation maintains performance while enhancing user experience.
+
+**Updated** Added performance considerations for new formatting and personality components.
 
 **Section sources**
 - [validation_engine.py:15-17](file://veritas-ai/core/validation_engine.py#L15-L17)
@@ -458,32 +559,50 @@ MAIN["app/main.py"] --> ROUTER
 - [multi_agent_pipeline.py:52](file://veritas-ai/pipelines/multi_agent_pipeline.py#L52)
 - [fast_pipeline.py:9-13](file://veritas-ai/pipelines/fast_pipeline.py#L9-L13)
 - [main.py:33-68](file://veritas-ai/app/main.py#L33-L68)
+- [formatter.py:29-143](file://veritas-ai/core/formatter.py#L29-L143)
+- [personality.py:6-105](file://veritas-ai/core/personality.py#L6-L105)
 
 ## Troubleshooting Guide
 - Timeouts and fallbacks: The application enforces global request timeouts and returns fallback responses on failure.
 - Logging and observability: Metrics and drift logs are written to JSONL files for diagnostics.
 - Alerts: Anomaly detection emits structured alerts with severity and messages.
 - Cache health: Router falls back gracefully when Redis is unavailable.
+- Response formatting: Structured output formatting handles edge cases and provides fallback summaries.
+- Personality adaptation: Context-aware response adaptation maintains consistent behavior across different conversation contexts.
+
+**Updated** Added troubleshooting guidance for new formatting and personality components.
 
 Operational checks:
 - Verify cache connectivity and fallback behavior.
 - Inspect observability logs for drift and performance trends.
 - Review alert logs for recurring anomalies.
 - Confirm pipeline timeouts and error handlers are functioning.
+- Test response formatting with various input types and edge cases.
+- Validate personality adaptation across different conversation contexts.
 
 **Section sources**
 - [main.py:127-167](file://veritas-ai/app/main.py#L127-L167)
 - [observability.py:25-72](file://veritas-ai/core/observability.py#L25-L72)
 - [alert_engine.py:26-67](file://veritas-ai/core/alert_engine.py#L26-L67)
 - [router.py:102-119](file://veritas-ai/core/router.py#L102-L119)
+- [formatter.py:67-103](file://veritas-ai/core/formatter.py#L67-L103)
+- [personality.py:28-90](file://veritas-ai/core/personality.py#L28-L90)
 
 ## Conclusion
-Veritas AI’s core components form a robust, multi-layered verification pipeline. The Truth Engine provides mathematically grounded scoring, the Validation Engine ensures non-blocking computation, the Consensus Engine harmonizes diverse confidence signals, the Explainability Layer improves trust through transparency, and the Hallucination Firewall enforces safety. The Router intelligently selects the optimal path, while the Fast and Deep Pipelines deliver performance and depth respectively. Together, these components enable scalable, observable, and resilient truth verification.
+Veritas AI's core components form a robust, multi-layered verification pipeline. The Truth Engine provides mathematically grounded scoring, the Validation Engine ensures non-blocking computation, the Consensus Engine harmonizes diverse confidence signals, the Explainability Layer improves trust through transparency, and the Hallucination Firewall enforces safety. The new Response Formatting Engine enhances output quality with structured formatting and truth scoring, while the Personality Module provides context-aware conversational style adaptation. The Router intelligently selects the optimal path, while the Fast and Deep Pipelines deliver performance and depth respectively. Together, these components enable scalable, observable, and resilient truth verification with enhanced user experience.
+
+**Updated** Added Response Formatting Engine and Personality Module to the conclusion.
 
 ## Appendices
 - Data Contracts: QueryResponse defines the canonical output schema across the system.
 - Tools: Truth scoring tool integrates with the Truth Engine for deterministic scoring.
+- Response Formatting: Structured output formatting with truth scoring and confidence levels.
+- Personality Configuration: Context-aware conversational style adaptation for different interaction scenarios.
+
+**Updated** Added appendices for new formatting and personality components.
 
 **Section sources**
 - [schemas.py:14-26](file://veritas-ai/models/schemas.py#L14-L26)
 - [truth_tools.py:5-29](file://veritas-ai/tools/truth_tools.py#L5-L29)
+- [formatter.py:1-143](file://veritas-ai/core/formatter.py#L1-L143)
+- [personality.py:1-105](file://veritas-ai/core/personality.py#L1-L105)

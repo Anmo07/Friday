@@ -3,6 +3,12 @@ import asyncio
 import logging
 from typing import Dict, List
 
+from models.ollama_runtime import (
+    OllamaModelUnavailableError,
+    create_ollama_llm,
+    require_model_name,
+)
+
 logger = logging.getLogger(__name__)
 
 # Source authority scoring (from old core/truth_engine.py)
@@ -41,11 +47,14 @@ async def retrieval_agent(query: str) -> Dict:
     """
     try:
         from app.core.config import settings
-        from langchain_community.llms import Ollama
 
-        llm = Ollama(
+        model_name = require_model_name(
+            [settings.FAST_MODEL, settings.MODEL_NAME, settings.ROUTER_MODEL],
             base_url=settings.OLLAMA_BASE_URL,
-            model=settings.FAST_MODEL or settings.MODEL_NAME,
+        )
+        llm = create_ollama_llm(
+            base_url=settings.OLLAMA_BASE_URL,
+            model=model_name,
             temperature=0.0,
         )
 
@@ -86,6 +95,17 @@ INITIAL_CREDIBILITY: [float 0.0-1.0 based on how verifiable this claim is]"""
             "sources": [],  # Actual URLs would come from web scraping in production
             "authority_score": credibility,
             "retrieval_complete": True,
+        }
+    except OllamaModelUnavailableError as e:
+        logger.info(f"Retrieval agent using fallback: {e}")
+        return {
+            "query": query,
+            "assessment": "No local Ollama model is installed, so I used the lightweight fallback.",
+            "sources_needed": [],
+            "source_credibility": 0.5,
+            "sources": [],
+            "authority_score": 0.5,
+            "retrieval_complete": False,
         }
     except Exception as e:
         logger.warning(f"Retrieval agent failed, using fallback: {e}")

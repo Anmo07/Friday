@@ -1,392 +1,280 @@
 "use client";
-import React, { useState, useEffect, useRef, useCallback } from "react";
+
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import {
+  Activity,
+  AlertTriangle,
+  Bot,
+  Brain,
+  Command,
+  Ear,
+  Mic,
+  MicOff,
+  Newspaper,
+  OctagonX,
+  Sparkles,
+  Volume2,
+} from "lucide-react";
+
 import { useWebSocket } from "@/hooks/useWebSocket";
-import { TruthGauge } from "./TruthGauge";
-import { Loader2, AlertTriangle, ShieldCheck, Zap, ServerCrash, Mic, MicOff, Volume2, CheckCircle2, Clock, Brain, Search, Shield, FileSearch, MessageSquareWarning, Activity } from "lucide-react";
 import { WS_BASE_URL, formatPercent } from "@/services/api";
 import { QueryResponse } from "@/types/api";
+import { ControlRoom } from "./ControlRoom";
 
-const PROGRESS_STAGES = [
-  { key: "cache_check", label: "Checking cache...", icon: Clock },
-  { key: "routing", label: "Analyzing query...", icon: Brain },
-  { key: "processing", label: "Processing...", icon: Loader2 },
-  { key: "data_collection", label: "Collecting data...", icon: Search },
-  { key: "verification", label: "Verifying sources...", icon: Shield },
-  { key: "fact_check", label: "Cross-referencing facts...", icon: CheckCircle2 },
-  { key: "scoring", label: "Computing truth score...", icon: FileSearch },
-  { key: "generating", label: "Generating response...", icon: Zap },
-  { key: "finalizing", label: "Finalizing response...", icon: Loader2 },
-];
+type SpeechRecognitionInstance = {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onstart: (() => void) | null;
+  onend: (() => void) | null;
+  onerror: ((event: { error: string }) => void) | null;
+  onresult: ((event: any) => void) | null;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+};
+
+const INTERRUPT_PHRASES = ["stop", "wait", "cancel", "hold on"];
+
+const STAGE_LABELS: Record<string, string> = {
+  cache_check: "Checking memory",
+  action: "Working the system",
+  news_fetch: "Scanning current coverage",
+  processing: "Thinking",
+  data_collection: "Pulling context",
+  verification: "Verifying",
+  generating: "Framing the answer",
+  complete: "Ready",
+};
+
+const INTENT_STYLES: Record<string, { label: string; icon: React.ElementType; badge: string }> = {
+  control: { label: "System Control", icon: Command, badge: "bg-amber-500/10 text-amber-200 border-amber-400/30" },
+  news: { label: "News Sweep", icon: Newspaper, badge: "bg-cyan-500/10 text-cyan-200 border-cyan-400/30" },
+  verification: { label: "Verification", icon: Brain, badge: "bg-fuchsia-500/10 text-fuchsia-200 border-fuchsia-400/30" },
+  chat: { label: "Assistant", icon: Bot, badge: "bg-emerald-500/10 text-emerald-200 border-emerald-400/30" },
+  interrupt: { label: "Interrupted", icon: OctagonX, badge: "bg-rose-500/10 text-rose-200 border-rose-400/30" },
+};
+
+const normalizeTranscript = (value: string) => value.replace(/\s+/g, " ").trim();
+const shouldInterrupt = (value: string) => INTERRUPT_PHRASES.includes(normalizeTranscript(value).toLowerCase());
 
 export default function Dashboard() {
-  const { streamData, alerts, activeStatus, error, progress, currentStage, sendQuery } = useWebSocket(WS_BASE_URL);
-  const [query, setQuery] = useState("");
+  const {
+    streamData,
+    activeStatus,
+    error,
+    progress,
+    currentStage,
+    assistantMessage,
+    sessionGreeting,
+    mode,
+    intent,
+    sendQuery,
+    interrupt,
+  } = useWebSocket(WS_BASE_URL);
+
   const [isListening, setIsListening] = useState(false);
-  const recognitionRef = useRef<any>(null);
-  const [lastSpokenSummary, setLastSpokenSummary] = useState<string>("");
-  const sendQueryRef = useRef(sendQuery);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [micError, setMicError] = useState<string | null>(null);
+  const [liveTranscript, setLiveTranscript] = useState("");
+  const [lastUserQuery, setLastUserQuery] = useState("");
 
-  useEffect(() => {
-    sendQueryRef.current = sendQuery;
-  }, [sendQuery]);
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const shouldKeepListeningRef = useRef(true);
+  const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSentQueryRef = useRef("");
+  const lastSpokenRef = useRef("");
+  const greetingSpokenRef = useRef(false);
+  const busyRef = useRef(false);
+  const speakingRef = useRef(false);
 
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      // @ts-ignore
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (SpeechRecognition && !recognitionRef.current) {
-        recognitionRef.current = new SpeechRecognition();
-        recognitionRef.current.continuous = true;
-        recognitionRef.current.interimResults = true;
-        recognitionRef.current.lang = 'en-US';
+  const payload: QueryResponse | null = streamData[0] || null;
+  const isBusy = ["transmitting", "assistant", "processing"].includes(activeStatus);
+  const stageLabel = STAGE_LABELS[currentStage] || assistantMessage || "Listening";
+  
+  const currentIntent = intent || payload?.intent || "chat";
+  const intentStyle = INTENT_STYLES[currentIntent] || INTENT_STYLES.chat;
+  const IntentIcon = intentStyle.icon;
 
-        recognitionRef.current.onstart = () => {
-          console.log("Speech recognition started");
-        };
+  useEffect(() => { busyRef.current = isBusy; }, [isBusy]);
+  useEffect(() => { speakingRef.current = isSpeaking; }, [isSpeaking]);
 
-        recognitionRef.current.onresult = (event: any) => {
-          let fullTranscript = '';
-          for (let i = 0; i < event.results.length; ++i) {
-            fullTranscript += event.results[i][0].transcript;
-          }
-          setQuery(fullTranscript);
-        };
-
-        recognitionRef.current.onend = () => {
-          setIsListening(false);
-          setQuery((prev) => {
-            if (prev.trim().length > 2) {
-              sendQueryRef.current(prev.trim());
-            }
-            return prev;
-          });
-        };
-
-        recognitionRef.current.onerror = (event: any) => {
-          console.error("Speech recognition error", event.error);
-          setIsListening(false);
-        };
-      }
+  const stopSpeaking = useCallback(() => {
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
     }
   }, []);
 
-  const toggleVoice = () => {
-    if (isListening) {
-      try {
-        recognitionRef.current?.stop();
-      } catch (e) {
-        console.error("Error stopping recognition", e);
-      }
-      setIsListening(false);
-    } else {
-      setQuery("");
-      try {
-        recognitionRef.current?.start();
-        setIsListening(true);
-      } catch (e) {
-        console.error("Error starting recognition", e);
-        setIsListening(false);
-      }
-    }
-  };
+  const speakText = useCallback((text: string) => {
+    if (!text || typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    stopSpeaking();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1.05;
+    const voices = window.speechSynthesis.getVoices();
+    const preferred = voices.find(v => ["Samantha", "Siri", "Jenny"].some(n => v.name.includes(n)));
+    if (preferred) utterance.voice = preferred;
+    utterance.onstart = () => setIsSpeaking(true);
+    utterance.onend = () => setIsSpeaking(false);
+    window.speechSynthesis.speak(utterance);
+  }, [stopSpeaking]);
 
-  const handleExecute = useCallback(() => {
-    if (!query.trim()) return;
-    sendQuery(query);
-  }, [query, sendQuery]);
+  const handleInterrupt = useCallback((reason = "Stop") => {
+    stopSpeaking();
+    interrupt(reason);
+    setLiveTranscript("");
+  }, [interrupt, stopSpeaking]);
 
-  const payload: QueryResponse | null = streamData.length > 0 ? streamData[0] : null;
-  const isProcessing = activeStatus !== "idle" && activeStatus !== "complete" && activeStatus !== "error" && activeStatus !== "disconnected";
+  const dispatchQuery = useCallback((transcript: string, isFinal = false) => {
+    const cleaned = normalizeTranscript(transcript);
+    if (!cleaned || cleaned === lastSentQueryRef.current) return;
+    lastSentQueryRef.current = cleaned;
+    setLastUserQuery(cleaned);
+    const useDeep = /(show|analyze|compare|news|verify|fact|deep)/i.test(cleaned);
+    sendQuery(cleaned, { deep: useDeep });
+    setLiveTranscript("");
+  }, [sendQuery]);
+
+  const startListening = useCallback(() => {
+    if (!recognitionRef.current) return;
+    try { recognitionRef.current.start(); } catch {}
+  }, []);
 
   useEffect(() => {
-    if (payload && payload.summary && payload.summary !== lastSpokenSummary) {
-      if (typeof window !== "undefined" && 'speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(payload.summary);
-        utterance.rate = 1.0;
-        utterance.pitch = 1.0;
+    if (typeof window === "undefined") return;
+    const SpeechRecognitionCtor = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognitionCtor) { setMicError("Browser does not support speech recognition."); return; }
 
-        const voices = window.speechSynthesis.getVoices();
-        const idealVoice = voices.find(v => v.name.includes("Samantha") || v.name.includes("Google") || v.name.includes("Siri") || v.name.includes("Alex"));
-        if (idealVoice) utterance.voice = idealVoice;
-        
-        utterance.onstart = () => setIsSpeaking(true);
-        utterance.onend = () => setIsSpeaking(false);
-        utterance.onerror = () => setIsSpeaking(false);
-
-        window.speechSynthesis.speak(utterance);
-        setLastSpokenSummary(payload.summary);
+    const recognition: SpeechRecognitionInstance = new SpeechRecognitionCtor();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+    recognition.onstart = () => { setIsListening(true); setMicError(null); };
+    recognition.onresult = (event: any) => {
+      let final = "", interim = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const chunk = event.results[i][0]?.transcript || "";
+        if (event.results[i].isFinal) final += chunk; else interim += chunk;
       }
+      const transcript = normalizeTranscript(`${final} ${interim}`);
+      setLiveTranscript(transcript);
+      if (!transcript) return;
+      if ((busyRef.current || speakingRef.current) && shouldInterrupt(transcript)) { handleInterrupt(transcript); return; }
+      if (speakingRef.current) return;
+      if (final.trim() && !interim.trim()) dispatchQuery(transcript, true);
+    };
+    recognition.onerror = (event: { error: string }) => {
+      setIsListening(false);
+      if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+        shouldKeepListeningRef.current = false;
+        setMicError("Mic permission is blocked. Tap the orb to retry.");
+        return;
+      }
+      if (event.error === "network" || event.error === "no-speech" || event.error === "aborted") {
+        // Silently ignore common ephemeral errors and let onend restart it.
+        return;
+      }
+      setMicError(`Mic issue: ${event.error}`);
+    };
+    recognition.onend = () => { setIsListening(false); if (shouldKeepListeningRef.current) restartTimerRef.current = setTimeout(startListening, 300); };
+    recognitionRef.current = recognition;
+    startListening();
+    return () => { shouldKeepListeningRef.current = false; recognition.abort(); stopSpeaking(); };
+  }, [dispatchQuery, handleInterrupt, startListening, stopSpeaking]);
+
+  useEffect(() => {
+    if (sessionGreeting && !greetingSpokenRef.current) {
+      greetingSpokenRef.current = true;
+      speakText(sessionGreeting);
     }
-  }, [payload, lastSpokenSummary]);
+  }, [sessionGreeting, speakText]);
 
-  const currentStageInfo = PROGRESS_STAGES.find(s => s.key === currentStage);
-  const CurrentStageIcon = currentStageInfo?.icon || Loader2;
-
-  // Determine orb state
-  let orbState = "idle";
-  if (isSpeaking) orbState = "speaking";
-  else if (isProcessing) orbState = "processing";
-  else if (isListening) orbState = "listening";
-
-  const getOrbStyles = () => {
-    switch (orbState) {
-      case "listening":
-        return "bg-cyan-500/20 border-cyan-400 shadow-[0_0_40px_rgba(0,234,255,0.6)] animate-pulse";
-      case "processing":
-        return "bg-purple-500/20 border-purple-400 shadow-[0_0_40px_rgba(168,85,247,0.6)] animate-[orb-pulse_2s_ease-in-out_infinite]";
-      case "speaking":
-        return "bg-pink-500/20 border-pink-400 shadow-[0_0_40px_rgba(236,72,153,0.6)] animate-[orb-pulse_1s_ease-in-out_infinite]";
-      default:
-        return "bg-gray-800/50 border-gray-600 hover:border-cyan-400 hover:shadow-[0_0_20px_rgba(0,234,255,0.3)] transition-all";
+  useEffect(() => {
+    if (payload?.summary && payload.summary !== lastSpokenRef.current) {
+      lastSpokenRef.current = payload.summary;
+      speakText(payload.summary);
     }
-  };
+  }, [payload, speakText]);
 
-  const getOrbIconColor = () => {
-    switch (orbState) {
-      case "listening": return "text-cyan-400";
-      case "processing": return "text-purple-400";
-      case "speaking": return "text-pink-400";
-      default: return "text-gray-400";
-    }
-  };
+  const orbState = activeStatus === "interrupted" ? "interrupted" : isSpeaking ? "speaking" : isBusy ? "processing" : isListening ? "listening" : "idle";
+  const orbStyles = orbState === "listening" ? "border-emerald-300 bg-emerald-400/10 shadow-[0_0_40px_rgba(52,211,153,0.2)]" :
+                     orbState === "processing" ? "border-cyan-300 bg-cyan-400/10 shadow-[0_0_40px_rgba(34,211,238,0.2)] animate-pulse" :
+                     orbState === "speaking" ? "border-fuchsia-300 bg-fuchsia-400/10 shadow-[0_0_40px_rgba(232,121,249,0.2)] animate-pulse" :
+                     orbState === "interrupted" ? "border-rose-300 bg-rose-400/10 shadow-[0_0_40px_rgba(251,113,133,0.2)]" :
+                     "border-white/10 bg-white/5";
 
   return (
-    <div className="w-full min-h-[80vh] flex flex-col items-center justify-start pt-10 gap-8 relative pb-20 font-sans">
+    <div className="relative w-full min-h-screen bg-[#020617] text-slate-200 font-sans p-6 overflow-hidden">
+      {/* Background Ambience */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,0.1),transparent_50%)]" />
       
-      {/* Background elements */}
-      <div className="absolute inset-0 z-0 pointer-events-none opacity-20 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-cyan-900/40 via-transparent to-transparent"></div>
-
-      {/* Top Status Indicators */}
-      <div className="w-full max-w-4xl flex justify-between px-4 z-10 text-xs font-mono uppercase tracking-widest text-cyan-500/70">
-        <div className="flex items-center gap-2">
-          <Activity className={`w-4 h-4 ${activeStatus === 'disconnected' ? 'text-red-500' : 'text-cyan-400'} ${activeStatus !== 'idle' && activeStatus !== 'disconnected' ? 'animate-pulse' : ''}`} />
-          SYS: {activeStatus.toUpperCase()}
-        </div>
-        <div className="flex items-center gap-2">
-           NET: {activeStatus === 'disconnected' ? 'OFFLINE' : 'SECURE'}
-        </div>
-      </div>
-
-      {/* Center Focus: Voice Orb */}
-      <div className="z-10 flex flex-col items-center gap-6 mt-10">
-        <button
-          onClick={toggleVoice}
-          className={`relative w-32 h-32 rounded-full border-2 flex items-center justify-center backdrop-blur-md transition-all duration-500 ${getOrbStyles()}`}
-        >
-          {/* Inner ring */}
-          <div className={`absolute inset-2 rounded-full border border-white/10 ${orbState !== 'idle' ? 'animate-ping opacity-20' : ''}`}></div>
+      <div className="relative z-10 max-w-7xl mx-auto flex flex-col gap-8">
+        
+        {/* TOP CENTER ORB */}
+        <div className="flex flex-col items-center justify-center gap-4 mt-4">
+          <button 
+            onClick={() => { if (isBusy || isSpeaking) handleInterrupt(); else startListening(); }}
+            className={`relative flex h-32 w-32 items-center justify-center rounded-full border transition-all duration-500 ${orbStyles}`}
+          >
+            <div className="absolute inset-2 rounded-full border border-white/5" />
+            {orbState === "speaking" ? <Volume2 className="h-10 w-10 text-fuchsia-200" /> :
+             orbState === "processing" ? <Brain className="h-10 w-10 text-cyan-200" /> :
+             isListening ? <Mic className="h-10 w-10 text-emerald-200" /> :
+             <MicOff className="h-10 w-10 text-slate-500" />}
+          </button>
           
-          {orbState === 'processing' ? (
-            <Brain className={`w-12 h-12 ${getOrbIconColor()} animate-pulse`} />
-          ) : orbState === 'speaking' ? (
-            <Volume2 className={`w-12 h-12 ${getOrbIconColor()} animate-pulse`} />
-          ) : isListening ? (
-            <Mic className={`w-12 h-12 ${getOrbIconColor()}`} />
+          <div className="flex flex-col items-center text-center">
+            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] uppercase tracking-widest text-cyan-300 mb-2">
+              <Sparkles className="h-3 w-3" /> {stageLabel}
+            </div>
+            <p className="text-lg font-medium text-white max-w-lg h-12 overflow-hidden">{assistantMessage || "I’m listening, Boss."}</p>
+          </div>
+        </div>
+
+        {/* DASHBOARD GRID / CONTROL ROOM */}
+        <div className="w-full transition-all duration-700">
+          { (mode === "verification" || currentIntent === "news" || currentIntent === "verification") && payload ? (
+            <ControlRoom payload={payload} />
           ) : (
-            <MicOff className={`w-12 h-12 ${getOrbIconColor()}`} />
-          )}
-        </button>
-        <div className="text-sm font-medium tracking-widest uppercase text-gray-400/80 animate-fade-up">
-           {orbState === 'listening' ? "Listening..." : orbState === 'processing' ? "Analyzing Data" : orbState === 'speaking' ? "Vocalizing" : "System Ready"}
-        </div>
-      </div>
-
-      {/* Live Transcript / Input */}
-      <div className="w-full max-w-2xl z-10 animate-fade-up" style={{ animationDelay: "0.2s" }}>
-        <div className="relative group">
-           <input
-             type="text"
-             className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-5 text-white text-lg text-center focus:outline-none focus:border-cyan-500/50 focus:shadow-[0_0_30px_rgba(0,234,255,0.2)] transition-all placeholder:text-gray-600 backdrop-blur-xl"
-             placeholder="Initiate query or enable microphone..."
-             value={query}
-             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.target.value)}
-             onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => e.key === "Enter" && handleExecute()}
-             disabled={isProcessing || isSpeaking}
-           />
-           {!isProcessing && !isListening && query.trim() && (
-             <button
-               onClick={handleExecute}
-               className="absolute right-4 top-1/2 -translate-y-1/2 bg-cyan-500/20 hover:bg-cyan-500/40 text-cyan-400 p-2 rounded-xl border border-cyan-500/50 transition-all shadow-[0_0_15px_rgba(0,234,255,0.3)]"
-             >
-               <Zap className="w-5 h-5" />
-             </button>
-           )}
-        </div>
-      </div>
-
-      {/* Processing Status Panel */}
-      {isProcessing && !payload && (
-        <div className="w-full max-w-2xl bg-[#01030a]/80 backdrop-blur-xl border border-purple-500/30 rounded-2xl p-6 mt-4 z-10 shadow-[0_0_30px_rgba(168,85,247,0.15)] animate-fade-up">
-          <div className="flex items-center gap-4 mb-4">
-            <CurrentStageIcon className={`w-6 h-6 text-purple-400 ${currentStageInfo?.key === "parallel_agents" ? "animate-pulse" : ""}`} />
-            <span className="text-purple-200 font-mono tracking-wide uppercase text-sm">
-              {activeStatus === "transmitting" ? "INITIALIZING UPLINK..." : activeStatus}
-            </span>
-          </div>
-          
-          <div className="w-full bg-gray-900 rounded-full h-1.5 overflow-hidden">
-            <div 
-              className="h-full bg-gradient-to-r from-purple-600 to-cyan-400 transition-all duration-500 ease-out shadow-[0_0_10px_rgba(0,234,255,0.8)]"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-          
-          <div className="flex justify-between mt-3 text-xs text-gray-500 font-mono">
-            <span>SYS.START</span>
-            <span className="text-cyan-400 font-bold">{progress}%</span>
-            <span>SYS.END</span>
-          </div>
-          
-          <div className="mt-5 flex flex-wrap gap-2 justify-center">
-            {PROGRESS_STAGES.map((stage, idx) => {
-              const isComplete = progress > (idx * 100 / PROGRESS_STAGES.length);
-              const isActive = currentStage === stage.key;
-              const StageIcon = stage.icon;
-              return (
-                <div 
-                  key={stage.key}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-mono tracking-wider uppercase transition-all ${
-                    isComplete 
-                      ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30' 
-                      : isActive 
-                        ? 'bg-purple-500/20 text-purple-400 border border-purple-500/50 shadow-[0_0_10px_rgba(168,85,247,0.4)] animate-pulse'
-                        : 'bg-black/50 text-gray-600 border border-white/5'
-                  }`}
-                >
-                  <StageIcon className="w-3 h-3" />
-                  <span className="hidden sm:inline">{stage.label}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Alerts & Errors */}
-      <div className="w-full max-w-4xl z-10 flex flex-col gap-4">
-        {error && (
-          <div className="w-full bg-pink-950/20 border border-pink-500/40 rounded-xl p-4 flex items-center gap-3 backdrop-blur-md shadow-[0_0_20px_rgba(236,72,153,0.15)]">
-            <AlertTriangle className="w-5 h-5 text-pink-400" />
-            <span className="text-pink-200 text-sm font-mono">{error}</span>
-          </div>
-        )}
-
-        {alerts.length > 0 && (
-          <div className="w-full flex flex-col gap-3">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {alerts.slice(0, 4).map((alert: any, i: number) => (
-                <div key={i} className={`p-4 rounded-xl border flex items-start gap-3 backdrop-blur-md ${alert.severity === 'high' ? 'bg-pink-950/20 border-pink-500/30 shadow-[0_0_15px_rgba(236,72,153,0.1)]' : 'bg-purple-950/20 border-purple-500/30 shadow-[0_0_15px_rgba(168,85,247,0.1)]'}`}>
-                  {alert.severity === 'high' ? <ServerCrash className="text-pink-400 mt-1" /> : <AlertTriangle className="text-purple-400 mt-1" />}
-                  <div className="flex flex-col">
-                    <span className={`text-xs font-mono font-bold uppercase tracking-wider ${alert.severity === 'high' ? 'text-pink-400' : 'text-purple-400'}`}>{alert.alert_type}</span>
-                    <span className="text-gray-300 text-sm mt-1">{alert.message}</span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 opacity-80">
+              {/* Simple View for Chat/General Mode */}
+              <div className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl h-64 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-emerald-400 mb-4">
+                    <Ear className="h-4 w-4" /> Live Ear
                   </div>
+                  <p className="text-xl text-slate-300">{liveTranscript || "..."}</p>
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Payload / Output Panel */}
-      {payload && (
-        <div className="w-full max-w-5xl z-10 mt-4 animate-in fade-in slide-in-from-bottom-8 duration-700">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            
-            {/* Status & Gauge */}
-            <div className="glass bg-[#01030a]/60 border border-white/10 rounded-3xl p-8 flex flex-col items-center relative overflow-hidden group">
-              <div className="absolute inset-0 bg-gradient-to-b from-cyan-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                {lastUserQuery && <div className="text-xs text-slate-500">Last: {lastUserQuery}</div>}
+              </div>
               
-              <TruthGauge score={payload.truth_score !== undefined ? payload.truth_score : 0.0} />
-
-              <div className="mt-8 flex flex-col items-center gap-3 w-full z-10">
-                <div className={`px-6 py-2.5 rounded-full font-mono font-bold uppercase tracking-widest text-sm flex items-center gap-2 shadow-[0_0_20px_rgba(0,0,0,0.5)] ${payload.status === 'verified' ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/40 shadow-[0_0_20px_rgba(0,234,255,0.2)]' : payload.status === 'likely_false' ? 'bg-pink-500/10 text-pink-400 border border-pink-500/40 shadow-[0_0_20px_rgba(236,72,153,0.2)]' : 'bg-purple-500/10 text-purple-400 border border-purple-500/40 shadow-[0_0_20px_rgba(168,85,247,0.2)]'}`}>
-                  {payload.status === 'verified' ? <ShieldCheck className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
-                  {payload.status}
+              <div className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl h-64 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-cyan-400 mb-4">
+                    <Bot className="h-4 w-4" /> Status
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm"><span>Neural Engine</span><span className="text-cyan-400">ONLINE</span></div>
+                    <div className="flex justify-between text-sm"><span>Voice Synthesis</span><span className="text-fuchsia-400">READY</span></div>
+                    <div className="flex justify-between text-sm"><span>Verification Layer</span><span className="text-amber-400">IDLE</span></div>
+                  </div>
                 </div>
-
-                {payload._cached && (
-                  <div className="px-3 py-1 rounded-full text-[10px] font-mono bg-white/5 text-gray-400 border border-white/10 flex items-center gap-1 mt-2">
-                    <Zap className="w-3 h-3 text-cyan-500" /> CACHED_RES
-                  </div>
-                )}
-
-                {payload.explanation && payload.explanation.confidence_breakdown && (
-                  <div className="grid grid-cols-3 gap-2 w-full mt-6">
-                    <div className="flex flex-col items-center bg-black/60 p-3 rounded-xl border border-white/5">
-                      <span className="text-cyan-400 font-mono font-bold text-lg">{payload.explanation.confidence_breakdown.authority}</span>
-                      <span className="text-[9px] text-gray-500 uppercase tracking-widest font-mono mt-1">AUTH</span>
-                    </div>
-                    <div className="flex flex-col items-center bg-black/60 p-3 rounded-xl border border-white/5">
-                      <span className="text-cyan-400 font-mono font-bold text-lg">{payload.explanation.confidence_breakdown.agreement}</span>
-                      <span className="text-[9px] text-gray-500 uppercase tracking-widest font-mono mt-1">AGREE</span>
-                    </div>
-                    <div className="flex flex-col items-center bg-black/60 p-3 rounded-xl border border-white/5">
-                      <span className="text-pink-400 font-mono font-bold text-lg">{payload.explanation.confidence_breakdown.bias}</span>
-                      <span className="text-[9px] text-gray-500 uppercase tracking-widest font-mono mt-1">BIAS</span>
-                    </div>
-                  </div>
-                )}
+                <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                   <div className="h-full bg-cyan-500 transition-all duration-500" style={{ width: `${progress}%` }} />
+                </div>
               </div>
             </div>
-
-            {/* Content Panel */}
-            <div className="lg:col-span-2 flex flex-col gap-6">
-              <div className="glass bg-[#01030a]/60 border border-white/10 rounded-3xl p-8 relative overflow-hidden group">
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 opacity-50"></div>
-                
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-sm font-mono uppercase tracking-widest text-cyan-400 flex items-center gap-2">
-                    <Volume2 className="w-4 h-4" /> Vocalized Output
-                  </h2>
-                </div>
-                
-                <p className="text-gray-300 leading-relaxed text-lg font-light tracking-wide typing-effect" style={{animationDuration: "1s"}}>
-                  {payload.summary}
-                </p>
-              </div>
-
-              {payload.explanation && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="glass bg-cyan-950/10 border border-cyan-500/20 rounded-2xl p-6 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-16 h-16 bg-cyan-500/5 rounded-bl-full pointer-events-none"></div>
-                    <h4 className="text-cyan-500 font-mono font-bold uppercase tracking-widest text-xs mb-5 flex items-center gap-2">
-                      <ShieldCheck className="w-4 h-4" /> Supportive Evidence
-                    </h4>
-                    <ul className="flex flex-col gap-3">
-                      {payload.explanation.why_true.map((item: string, i: number) => (
-                        <li key={i} className="text-sm text-gray-400 flex items-start gap-3">
-                          <div className="w-1 h-1 rounded-full bg-cyan-500 mt-2.5 shrink-0 shadow-[0_0_5px_#00eaff]" />
-                          <span className="leading-relaxed">{item}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <div className="glass bg-pink-950/10 border border-pink-500/20 rounded-2xl p-6 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-16 h-16 bg-pink-500/5 rounded-bl-full pointer-events-none"></div>
-                    <h4 className="text-pink-500 font-mono font-bold uppercase tracking-widest text-xs mb-5 flex items-center gap-2">
-                      <AlertTriangle className="w-4 h-4" /> Contradictory Evidence
-                    </h4>
-                    <ul className="flex flex-col gap-3">
-                      {payload.explanation.why_false.map((item: string, i: number) => (
-                        <li key={i} className="text-sm text-gray-400 flex items-start gap-3">
-                          <div className="w-1 h-1 rounded-full bg-pink-500 mt-2.5 shrink-0 shadow-[0_0_5px_#ec4899]" />
-                          <span className="leading-relaxed">{item}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              )}
-            </div>
-            
-          </div>
+          )}
         </div>
-      )}
 
+        {/* ERROR HANDLING */}
+        {(error || micError) && (
+          <div className="flex items-center gap-3 rounded-2xl border border-rose-500/20 bg-rose-500/10 p-4 text-sm text-rose-200">
+            <AlertTriangle className="h-5 w-5 text-rose-400" /> {error || micError}
+          </div>
+        )}
+
+      </div>
     </div>
   );
 }

@@ -5,35 +5,35 @@ import { Shield, Zap, Globe, BarChart3, Code2, ChevronRight, Sparkles, Activity 
 const features = [
   {
     icon: Shield,
-    title: "Multi-Agent Verification",
-    desc: "CrewAI agents collaboratively verify claims across multiple independent sources in real-time.",
+    title: "Voice-First Assistance",
+    desc: "FRIDAY listens continuously, answers in real time, and stays interruptible while it works.",
     color: "from-blue-500 to-cyan-400",
   },
   {
     icon: Activity,
-    title: "Fake News Detection",
-    desc: "Transformer-based ML models score probability of misinformation with explainable confidence breakdowns.",
+    title: "Task-First Execution",
+    desc: "Open apps, run commands, control the browser, and handle system actions before dropping into deeper analysis.",
     color: "from-red-500 to-orange-400",
   },
   {
     icon: Globe,
-    title: "Knowledge Graph Intelligence",
-    desc: "Neo4j-powered entity graph maps relationships between claims, sources, and contradiction patterns.",
+    title: "Live News + Verification",
+    desc: "Pull current coverage fast, then switch into verification mode only when the question actually needs it.",
     color: "from-purple-500 to-pink-400",
   },
   {
     icon: BarChart3,
-    title: "Predictive Trend Analysis",
-    desc: "Early-warning spike detection identifies astroturfed misinformation campaigns before they go viral.",
+    title: "OS-Level Reach",
+    desc: "System-aware control hooks let FRIDAY behave like an assistant instead of a dashboard tool.",
     color: "from-green-500 to-emerald-400",
   },
 ];
 
 const stats = [
   { value: "6+", label: "AI Agents" },
-  { value: "<2s", label: "Avg Latency" },
-  { value: "94%", label: "F1 Score" },
-  { value: "24/7", label: "Monitoring" },
+  { value: "<500ms", label: "Response Start" },
+  { value: "2", label: "Max LLM Calls" },
+  { value: "24/7", label: "Listening Loop" },
 ];
 
 export default function Home() {
@@ -44,17 +44,17 @@ export default function Home() {
         <div className="max-w-5xl mx-auto text-center relative z-10">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-sm font-mono mb-8 animate-fade-up shadow-[0_0_15px_rgba(0,234,255,0.2)]">
             <Sparkles className="w-4 h-4" />
-            AI-Powered Truth Intelligence Engine
+            Always-On AI Assistant
           </div>
 
           <h1 className="text-5xl md:text-7xl font-extrabold leading-tight mb-6 animate-fade-up" style={{ animationDelay: "0.1s" }}>
-            <span className="text-white">Verify Truth.</span>
+            <span className="text-white">Talk to</span>
             <br />
-            <span className="gradient-text">Expose Lies.</span>
+            <span className="gradient-text">FRIDAY.</span>
           </h1>
 
           <p className="text-lg md:text-xl text-gray-400 max-w-2xl mx-auto mb-10 leading-relaxed animate-fade-up" style={{ animationDelay: "0.2s" }}>
-            Veritas AI deploys autonomous multi-agent intelligence pipelines to verify news claims, detect misinformation, and deliver explainable truth scores — in real-time.
+            A human-like, voice-first assistant with system control, live interruption, and fast verification when the job calls for receipts.
           </p>
 
           <div className="flex items-center justify-center gap-4 animate-fade-up" style={{ animationDelay: "0.3s" }}>
@@ -62,7 +62,7 @@ export default function Home() {
               href="/dashboard"
               className="px-8 py-4 bg-cyan-500/20 border border-cyan-500/50 text-cyan-400 font-mono font-bold uppercase tracking-wider rounded-xl shadow-[0_0_30px_rgba(0,234,255,0.4)] hover:shadow-[0_0_50px_rgba(0,234,255,0.6)] hover:bg-cyan-500/30 transition-all duration-300 flex items-center gap-2"
             >
-              <Zap className="w-5 h-5" /> Launch Intelligence
+              <Zap className="w-5 h-5" /> Wake FRIDAY
               <ChevronRight className="w-4 h-4" />
             </Link>
             <Link
@@ -91,10 +91,10 @@ export default function Home() {
       <section className="py-24 px-6">
         <div className="max-w-6xl mx-auto">
           <h2 className="text-3xl md:text-4xl font-bold text-white text-center mb-4">
-            Intelligence Architecture
+            Assistant Architecture
           </h2>
           <p className="text-gray-500 text-center max-w-xl mx-auto mb-16">
-            Six autonomous AI agents working in orchestrated consensus to deliver production-grade truth intelligence.
+            Fast assistant mode by default. Verification mode when the question actually needs deeper scrutiny.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {features.map((f, i) => (
@@ -117,13 +117,13 @@ export default function Home() {
       {/* CTA */}
       <section className="py-20 px-6">
         <div className="max-w-3xl mx-auto text-center glass rounded-3xl p-12">
-          <h2 className="text-3xl font-bold text-white mb-4">Ready to fight misinformation?</h2>
-          <p className="text-gray-400 mb-8">Start verifying claims in seconds with our Siri-like voice interface.</p>
+          <h2 className="text-3xl font-bold text-white mb-4">Ready to talk to your system?</h2>
+          <p className="text-gray-400 mb-8">Launch FRIDAY and start speaking. No input box. No enter key.</p>
           <Link
             href="/dashboard"
             className="inline-flex items-center gap-2 px-8 py-4 bg-cyan-500/20 border border-cyan-500/50 text-cyan-400 font-mono font-bold uppercase tracking-wider rounded-xl shadow-[0_0_30px_rgba(0,234,255,0.4)] hover:shadow-[0_0_50px_rgba(0,234,255,0.6)] hover:bg-cyan-500/30 transition-all"
           >
-            <Zap className="w-5 h-5" /> Open Dashboard
+            <Zap className="w-5 h-5" /> Open FRIDAY
           </Link>
         </div>
       </section>

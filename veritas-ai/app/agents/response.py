@@ -3,6 +3,8 @@ import logging
 from datetime import datetime, timezone
 from typing import List, Dict
 
+from core.personality import friday_personality
+
 logger = logging.getLogger(__name__)
 
 
@@ -17,16 +19,16 @@ def _build_summary(query: str, retrieval_data: Dict, validation_data: Dict) -> s
     sources = retrieval_data.get("sources", [])
 
     if assessment and assessment != "Unable to retrieve sources":
-        return assessment
+        return friday_personality.polish_response(assessment, mode="verification")
 
     if status == "verified" and truth_score > 0.75:
-        return f"The claim appears to be supported by available evidence (truth score: {truth_score:.2f})."
+        return f"That checks out from the evidence I found. Truth score: {truth_score:.2f}."
     if status == "likely_false":
-        return f"The claim appears to be unsupported or contradicted by available evidence (truth score: {truth_score:.2f})."
+        return f"That one looks shaky from the evidence I found. Truth score: {truth_score:.2f}."
     if not sources:
-        return "Insufficient verified evidence was collected to confirm the claim."
+        return "Not enough solid proof on that one yet."
 
-    return f"Verification completed for '{query}', but the collected evidence was too sparse for a stronger conclusion."
+    return "I checked it, but the evidence is still too thin for a stronger call."
 
 
 async def response_agent(query: str, results: List[Dict]) -> Dict:

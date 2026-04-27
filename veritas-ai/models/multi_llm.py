@@ -1,15 +1,25 @@
 import time
+import logging
 from typing import Any, Dict, List, Optional
 from dataclasses import dataclass
 from enum import Enum
 
 from langchain_core.callbacks.base import BaseCallbackHandler
-from langchain_community.llms import Ollama
 from langchain_core.globals import set_llm_cache
 from langchain_community.cache import SQLiteCache
 
 from config.settings import settings
 from core.observability import observability
+from models.ollama_runtime import (
+    OllamaLLM,
+    create_ollama_llm,
+    require_model_name,
+    list_installed_models,
+    OllamaModelUnavailableError,
+)
+
+
+logger = logging.getLogger(__name__)
 
 
 class ModelTier(Enum):
@@ -80,7 +90,7 @@ class MetricsCallbackHandler(BaseCallbackHandler):
 
 class LLMManager:
     _instance: Optional["LLMManager"] = None
-    _llms: Dict[ModelTier, Ollama] = {}
+    _llms: Dict[ModelTier, OllamaLLM] = {}
     _lock_initialized: bool = False
 
     def __new__(cls):
@@ -88,36 +98,45 @@ class LLMManager:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def get_llm(self, tier: ModelTier = ModelTier.MEDIUM) -> Ollama:
+    def get_llm(self, tier: ModelTier = ModelTier.MEDIUM) -> OllamaLLM:
         if tier not in self._llms:
             config = LLM_CONFIGS.get(tier, LLM_CONFIGS[ModelTier.MEDIUM])
-            self._llms[tier] = Ollama(
+            resolved_model = require_model_name(
+                [config.name, settings.FAST_MODEL, settings.MODEL_NAME, settings.ROUTER_MODEL],
                 base_url=settings.OLLAMA_BASE_URL,
-                model=config.name,
-                temperature=config.temperature,
+            )
+            self._llms[tier] = create_ollama_llm(
+                model=resolved_model,
                 callbacks=[MetricsCallbackHandler(config.name)],
+                temperature=config.temperature,
             )
         return self._llms[tier]
 
-    def get_fast_llm(self) -> Ollama:
+    def get_fast_llm(self) -> OllamaLLM:
         return self.get_llm(ModelTier.FAST)
 
-    def get_medium_llm(self) -> Ollama:
+    def get_medium_llm(self) -> OllamaLLM:
         return self.get_llm(ModelTier.MEDIUM)
 
-    def get_heavy_llm(self) -> Ollama:
+    def get_heavy_llm(self) -> OllamaLLM:
         return self.get_llm(ModelTier.HEAVY)
 
     async def preload_models(self) -> List[str]:
+        installed = list_installed_models(settings.OLLAMA_BASE_URL)
+        if not installed:
+            logger.info("No local Ollama models installed; skipping preload.")
+            return []
+
         loaded_models = []
         for tier in [ModelTier.FAST, ModelTier.MEDIUM]:
             try:
                 llm = self.get_llm(tier)
-                config = LLM_CONFIGS[tier]
                 llm.invoke("Hello")
-                loaded_models.append(config.name)
-            except Exception as e:
-                print(f"Warning: Could not preload {tier.value} model: {e}")
+                loaded_models.append(getattr(llm, "model", LLM_CONFIGS[tier].name))
+            except OllamaModelUnavailableError as exc:
+                logger.info("Skipping %s model preload: %s", tier.value, exc)
+            except Exception as exc:
+                logger.warning("Could not preload %s model: %s", tier.value, exc)
         return loaded_models
 
     def get_available_models(self) -> List[str]:
@@ -130,13 +149,13 @@ set_llm_cache(SQLiteCache(database_path=".veritas_llm_cache.db"))
 llm_manager = LLMManager()
 
 
-def get_llm(tier: ModelTier = ModelTier.MEDIUM) -> Ollama:
+def get_llm(tier: ModelTier = ModelTier.MEDIUM) -> OllamaLLM:
     return llm_manager.get_llm(tier)
 
 
-def get_fast_llm() -> Ollama:
+def get_fast_llm() -> OllamaLLM:
     return llm_manager.get_fast_llm()
 
 
-def get_heavy_llm() -> Ollama:
+def get_heavy_llm() -> OllamaLLM:
     return llm_manager.get_heavy_llm()

@@ -30,6 +30,13 @@ export interface QueryResponse {
   timestamp: string;
   _cached?: boolean;
   latency_ms?: number;
+  assistant_mode?: "assistant" | "verification";
+  intent?: "control" | "news" | "verification" | "chat" | "interrupt";
+  action?: string;
+  executed?: boolean;
+  requires_confirmation?: boolean;
+  interrupted?: boolean;
+  topic?: string;
 }
 
 export interface AlertItem {
@@ -54,7 +61,7 @@ export interface HistoryResponse {
 }
 
 export interface WebSocketMessage {
-  status: "processing" | "complete" | "alert" | "error";
+  status: "session" | "assistant" | "processing" | "complete" | "alert" | "error" | "interrupted";
   stage?: string;
   progress?: number;
   message?: string;
@@ -62,4 +69,8 @@ export interface WebSocketMessage {
   error?: { message: string } | string;
   transcription?: string;
   has_audio?: boolean;
+  greeting?: string;
+  period?: "morning" | "evening" | "neutral";
+  mode?: "assistant" | "verification";
+  intent?: "control" | "news" | "verification" | "chat" | "interrupt";
 }

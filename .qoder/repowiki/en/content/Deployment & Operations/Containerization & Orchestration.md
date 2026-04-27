@@ -11,7 +11,18 @@
 - [server.py](file://veritas-ai/api/server.py)
 - [requirements.txt](file://veritas-ai/requirements.txt)
 - [test_docker_health.py](file://veritas-ai/tests/test_docker_health.py)
+- [listener.py](file://veritas-ai/app/voice/listener.py)
+- [stt.py](file://veritas-ai/app/voice/stt.py)
+- [voice_manager.py](file://veritas-ai/voice/voice_manager.py)
 </cite>
+
+## Update Summary
+**Changes Made**
+- Updated Dockerfile to reflect streamlined containerization with FFmpeg and PortAudio dependencies
+- Removed references to Playwright/Chromium and NSS libraries from documentation
+- Added emphasis on essential audio processing capabilities for voice interface
+- Updated system dependencies section to focus on audio and media processing
+- Revised troubleshooting guide to address audio processing requirements
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -26,13 +37,15 @@
 10. [Appendices](#appendices)
 
 ## Introduction
-This document provides comprehensive containerization and orchestration guidance for Veritas AI with a focus on Docker-based deployment. It explains the multi-service Docker Compose setup, inter-service networking, persistent volume management, health checks, environment configuration, security posture, and production optimization strategies. The stack includes:
+This document provides comprehensive containerization and orchestration guidance for Veritas AI with a focus on Docker-based deployment. The project has been streamlined to focus on essential audio processing capabilities while maintaining the multi-service Docker Compose setup. The stack includes:
 - Backend API service (FastAPI)
 - Frontend dashboard (Next.js)
 - Neo4j knowledge graph database
 - ChromaDB vector store
 - Redis cache
 - Ollama LLM service
+
+**Updated** The containerization has been optimized to remove optional dependencies (Playwright/Chromium and NSS libraries) and focus on essential audio processing capabilities (FFmpeg and PortAudio support) for the voice-first interface.
 
 ## Project Structure
 The deployment is orchestrated via a single Docker Compose file that defines services, networks, and volumes. Supporting Dockerfiles define build-time and runtime configurations for backend and frontend. A convenience script automates local startup.
@@ -133,10 +146,13 @@ BE --> OL
 
 ### Backend Service
 - Build and runtime
-  - Multi-stage build with Python slim images, non-root user, and pre-installed Playwright binaries.
+  - Multi-stage build with Python slim images, non-root user, and essential system dependencies for audio processing.
   - Exposes port 8000 and runs uvicorn with two workers and concurrency limits.
+- System dependencies
+  - **Updated** Essential audio processing dependencies: libportaudio2 and ffmpeg for voice interface functionality.
+  - Removed optional dependencies like Playwright/Chromium and NSS libraries.
 - Health checks
-  - Internal health probe targets the backend’s health endpoint.
+  - Internal health probe targets the backend's health endpoint.
 - Dependencies
   - Integrates with Neo4j, Redis, ChromaDB, and Ollama via environment variables.
 - Startup behavior
@@ -163,12 +179,12 @@ BE-->>FE : "200 OK"
 
 **Diagram sources**
 - [docker-compose.yml:42-47](file://veritas-ai/docker-compose.yml#L42-L47)
-- [Dockerfile:76-81](file://veritas-ai/Dockerfile#L76-L81)
+- [Dockerfile:34-39](file://veritas-ai/Dockerfile#L34-L39)
 - [main.py:70-102](file://veritas-ai/app/main.py#L70-L102)
 - [server.py:88-94](file://veritas-ai/api/server.py#L88-L94)
 
 **Section sources**
-- [Dockerfile:1-81](file://veritas-ai/Dockerfile#L1-L81)
+- [Dockerfile:1-64](file://veritas-ai/Dockerfile#L1-L64)
 - [docker-compose.yml:5-47](file://veritas-ai/docker-compose.yml#L5-L47)
 - [main.py:70-102](file://veritas-ai/app/main.py#L70-L102)
 - [server.py:88-94](file://veritas-ai/api/server.py#L88-L94)
@@ -320,8 +336,9 @@ BE --> |healthy| OL["Ollama"]
   - Background model preload avoids blocking startup; ensure sufficient memory for concurrent model loads.
 - Streaming and timeouts
   - Global request timeout and streaming enablement are configurable via environment variables.
-
-[No sources needed since this section provides general guidance]
+- **Updated** Audio processing optimization
+  - FFmpeg and PortAudio dependencies are optimized for efficient voice processing.
+  - Voice listener and speech-to-text components use threading to avoid blocking the event loop.
 
 ## Troubleshooting Guide
 - Backend health failures
@@ -336,6 +353,10 @@ BE --> |healthy| OL["Ollama"]
   - Validate ping health and AOF persistence volume availability.
 - Ollama model availability
   - Ensure models are pulled and the service responds to list commands.
+- **Updated** Audio processing issues
+  - Verify FFmpeg and PortAudio dependencies are properly installed in the container.
+  - Check voice listener initialization and sounddevice availability.
+  - Ensure audio capture devices are accessible within the container environment.
 - Test suite for health
   - Use the provided test to validate HTTP and WebSocket endpoints.
 
@@ -349,9 +370,7 @@ BE --> |healthy| OL["Ollama"]
 - [test_docker_health.py:9-26](file://veritas-ai/tests/test_docker_health.py#L9-L26)
 
 ## Conclusion
-The Veritas AI stack is designed for reproducible, isolated deployment using Docker Compose. The custom bridge network ensures predictable inter-service communication, while persistent volumes safeguard stateful data. Health checks and environment-driven configuration support robust local and CI-friendly operations. For production, consider externalizing secrets, enabling TLS, scaling workers, and adding monitoring and backups.
-
-[No sources needed since this section summarizes without analyzing specific files]
+The Veritas AI stack is designed for reproducible, isolated deployment using Docker Compose. The custom bridge network ensures predictable inter-service communication, while persistent volumes safeguard stateful data. Health checks and environment-driven configuration support robust local and CI-friendly operations. The recent optimization focuses on essential audio processing capabilities while removing optional dependencies, making the containerization more streamlined and efficient. For production, consider externalizing secrets, enabling TLS, scaling workers, and adding monitoring and backups.
 
 ## Appendices
 
@@ -398,6 +417,9 @@ The Veritas AI stack is designed for reproducible, isolated deployment using Doc
   - Allocate sufficient disk space for model downloads and cache.
 - Frontend
   - Keep resource limits modest; rely on container orchestration for autoscaling.
+- **Updated** Audio processing resources
+  - Ensure adequate CPU and memory for voice processing tasks.
+  - Consider separate resource allocation for audio-heavy workloads.
 
 **Section sources**
 - [Dockerfile:79-81](file://veritas-ai/Dockerfile#L79-L81)
@@ -416,3 +438,19 @@ The Veritas AI stack is designed for reproducible, isolated deployment using Doc
 - [run_project.sh:17-40](file://run_project.sh#L17-L40)
 - [docker-compose.yml:42-47](file://veritas-ai/docker-compose.yml#L42-L47)
 - [frontend/Dockerfile:50-51](file://veritas-ai/frontend/Dockerfile#L50-L51)
+
+### Audio Processing Dependencies
+**New Section** The containerization now focuses on essential audio processing capabilities:
+- FFmpeg: Media processing and format conversion for voice interface
+- PortAudio: Cross-platform audio I/O library for real-time audio capture and playback
+- SoundDevice: Python bindings for PortAudio for voice capture functionality
+- Faster-Whisper: Efficient speech-to-text processing with lazy loading
+
+These dependencies enable the voice-first interface while maintaining a lean container footprint compared to previous versions with optional Playwright/Chromium dependencies.
+
+**Section sources**
+- [Dockerfile:34-39](file://veritas-ai/Dockerfile#L34-L39)
+- [requirements.txt:35-39](file://veritas-ai/requirements.txt#L35-L39)
+- [listener.py:76-80](file://veritas-ai/app/voice/listener.py#L76-L80)
+- [stt.py:20-27](file://veritas-ai/app/voice/stt.py#L20-L27)
+- [voice_manager.py:13-18](file://veritas-ai/voice/voice_manager.py#L13-L18)

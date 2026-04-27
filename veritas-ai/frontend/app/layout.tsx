@@ -3,9 +3,9 @@ import "./globals.css";
 import Navbar from "@/components/Navbar";
 
 export const metadata: Metadata = {
-  title: "Veritas AI — AI-Powered Truth Engine",
-  description: "Real-time multi-agent intelligence platform for fake news detection, truth scoring, and misinformation analysis. Powered by CrewAI, RAG, and Knowledge Graphs.",
-  keywords: "fake news detection, truth scoring, AI verification, misinformation, fact checking",
+  title: "FRIDAY — Voice-First AI Assistant",
+  description: "Always-on assistant with live voice interaction, interruption handling, OS control, and on-demand verification.",
+  keywords: "voice assistant, AI assistant, system control, verification, Friday AI",
 };
 
 export default function RootLayout({

@@ -1,252 +1,314 @@
-"""WebSocket endpoints for real-time streaming."""
+"""WebSocket endpoints for the FRIDAY assistant runtime."""
+
+from __future__ import annotations
+
 import asyncio
 import json
 import logging
 import time
-from typing import Optional, Callable, Awaitable
+from contextlib import suppress
+from typing import Awaitable, Callable
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from app.core.assistant import AssistantIntent, assistant_orchestrator
 from app.core.cache import cache
-from app.core.router import route, RouteDecision
-from app.pipeline.fast_pipeline import fast_pipeline
-from app.pipeline.deep_pipeline import deep_pipeline
 from app.voice.stt import transcribe
 from app.voice.tts import speak
+from core.personality import friday_personality
 
 logger = logging.getLogger(__name__)
 
 ws_router = APIRouter()
 
 
-# ---- WebSocket Helpers ----
-
-async def _send_json(ws: WebSocket, data: dict):
-    """Send JSON message, silently handle disconnects."""
+async def _send_json(ws: WebSocket, data: dict) -> None:
     try:
         await ws.send_json(data)
     except Exception:
-        pass
+        logger.debug("WebSocket send skipped; client likely disconnected")
 
 
-async def _send_progress(ws: WebSocket, stage: str, progress: int, message: str):
-    """Send structured progress update."""
-    await _send_json(ws, {
-        "status": "processing",
-        "stage": stage,
-        "progress": min(progress, 99),  # 100 is reserved for complete
-        "message": message,
-    })
+async def _send_progress(ws: WebSocket, stage: str, progress: int, message: str) -> None:
+    await _send_json(
+        ws,
+        {
+            "status": "processing",
+            "stage": stage,
+            "progress": min(progress, 99),
+            "message": message,
+        },
+    )
 
 
-async def _create_progress_callback(ws: WebSocket) -> Callable:
-    """Create a progress callback that streams updates to WebSocket."""
+async def _create_progress_callback(
+    ws: WebSocket,
+) -> Callable[[str, str], Awaitable[None]]:
     stage_progress = {
-        "processing": 10,
-        "data_collection": 30,
-        "verification": 50,
-        "fact_check": 60,
-        "scoring": 75,
-        "generating": 85,
+        "action": 20,
+        "news_fetch": 30,
+        "processing": 35,
+        "data_collection": 45,
+        "verification": 60,
+        "fact_check": 70,
+        "scoring": 80,
+        "generating": 88,
         "complete": 100,
     }
 
-    async def callback(stage: str, message: str):
-        progress = stage_progress.get(stage, 50)
-        await _send_progress(ws, stage, progress, message)
+    async def callback(stage: str, message: str) -> None:
+        await _send_progress(ws, stage, stage_progress.get(stage, 50), message)
 
     return callback
 
 
-# ---- Main Query WebSocket ----
+def _cacheable(intent: AssistantIntent) -> bool:
+    return intent.kind in {"chat", "verification"}
 
-@ws_router.websocket("/ws/stream")
-async def ws_stream(websocket: WebSocket):
-    """
-    Main WebSocket endpoint for query streaming.
 
-    Receives: {"query": "...", "deep": false}
-    Sends:
-      - {"status": "processing", "stage": "...", "progress": 0-99, "message": "..."}
-      - {"status": "complete", "data": {...QueryResponse...}, "progress": 100}
-      - {"status": "error", "error": {"message": "..."}}
-    """
-    await websocket.accept()
-    logger.info("WebSocket client connected: /ws/stream")
 
+async def _news_streamer(ws: WebSocket, query: str):
+    """Background task to stream live news updates."""
+    from tools.news_api import news_search_tool
+    seen_news = set()
     try:
         while True:
-            # Receive query
-            raw = await websocket.receive_text()
-            try:
-                msg = json.loads(raw)
-            except json.JSONDecodeError:
-                await _send_json(websocket, {
-                    "status": "error",
-                    "error": {"message": "Invalid JSON"},
+            # Poll every 30 seconds for news updates in Control Room Mode
+            news_data = await asyncio.to_thread(news_search_tool, query)
+            if news_data and news_data not in seen_news:
+                seen_news.add(news_data)
+                await _send_json(ws, {
+                    "status": "update",
+                    "type": "news_flash",
+                    "data": {"update": news_data},
+                    "message": "Boss, I found fresh updates on that topic."
                 })
-                continue
+            await asyncio.sleep(30)
+    except asyncio.CancelledError:
+        pass
 
-            query = msg.get("query", "").strip()
-            deep = msg.get("deep", False)
+async def _handle_query(
+    websocket: WebSocket,
+    query: str,
+    *,
+    deep: bool,
+    intent: AssistantIntent,
+) -> None:
+    start = time.monotonic()
 
-            if not query:
-                await _send_json(websocket, {
-                    "status": "error",
-                    "error": {"message": "Query is required"},
-                })
-                continue
-
-            start = time.monotonic()
-
-            # Check cache
-            await _send_progress(websocket, "cache_check", 5, "Checking cache...")
-            cached = await cache.get(query)
-            if cached is not None:
-                cached["_cached"] = True
-                await _send_json(websocket, {
+    if _cacheable(intent):
+        await _send_progress(websocket, "cache_check", 5, "Checking memory...")
+        cached = await cache.get(query)
+        if cached is not None:
+            cached["_cached"] = True
+            cached["assistant_mode"] = cached.get("assistant_mode", intent.mode)
+            cached["intent"] = cached.get("intent", intent.kind)
+            await _send_json(
+                websocket,
+                {
                     "status": "complete",
                     "data": cached,
                     "progress": 100,
-                    "message": "Served from cache",
-                })
-                continue
+                    "message": "Pulled from memory, Boss.",
+                },
+            )
+            return
 
-            # Route and execute
-            await _send_progress(websocket, "routing", 10, "Analyzing query...")
+    progress_callback = await _create_progress_callback(websocket)
+    response = await assistant_orchestrator.execute(
+        query,
+        deep_requested=deep,
+        progress_callback=progress_callback,
+    )
+    response["latency_ms"] = round((time.monotonic() - start) * 1000, 1)
 
-            progress_callback = await _create_progress_callback(websocket)
+    if _cacheable(intent):
+        await cache.set(query, response)
+
+    try:
+        from core.history_store import log_query_result
+        from models.schemas import QueryResponse
+
+        payload = QueryResponse(**response)
+        asyncio.create_task(asyncio.to_thread(log_query_result, payload, "public"))
+    except Exception:
+        logger.debug("History logging skipped for response")
+
+    await _send_json(
+        websocket,
+        {
+            "status": "complete",
+            "data": response,
+            "progress": 100,
+            "message": response.get("summary", "Ready, Boss."),
+        },
+    )
+
+
+@ws_router.websocket("/ws/stream")
+async def ws_stream(websocket: WebSocket) -> None:
+    await websocket.accept()
+    logger.info("WebSocket client connected: /ws/stream")
+
+    greeting = friday_personality.startup_greeting()
+    await _send_json(
+        websocket,
+        {
+            "status": "session",
+            "message": greeting.message,
+            "greeting": greeting.message,
+            "period": greeting.period,
+            "mode": "assistant",
+        },
+    )
+
+    current_task: asyncio.Task | None = None
+
+    try:
+        while True:
+            raw = await websocket.receive_text()
+            payload_type = "query"
+            deep = False
+            query = raw
 
             try:
-                if deep or route(query) == RouteDecision.DEEP:
-                    response = await deep_pipeline(query, progress_callback=progress_callback)
-                else:
-                    response = await fast_pipeline(query, progress_callback=progress_callback)
+                message = json.loads(raw)
+                payload_type = message.get("type", "query")
+                query = message.get("query", "")
+                deep = bool(message.get("deep", False))
+            except json.JSONDecodeError:
+                pass
 
-                response["latency_ms"] = round((time.monotonic() - start) * 1000, 1)
+            normalized_query = " ".join(str(query).split())
+            if payload_type == "interrupt" or friday_personality.detect_interruption(normalized_query):
+                if current_task and not current_task.done():
+                    current_task.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await current_task
+                await _send_json(
+                    websocket,
+                    {
+                        "status": "interrupted",
+                        "message": friday_personality.stopping_response(),
+                    },
+                )
+                current_task = None
+                continue
 
-                # Cache result
-                await cache.set(query, response)
+            if not normalized_query:
+                await _send_json(
+                    websocket,
+                    {
+                        "status": "error",
+                        "error": {"message": "Query is required"},
+                    },
+                )
+                continue
 
-                # Log to history (non-blocking)
-                try:
-                    from core.history_store import log_query_result
-                    from models.schemas import QueryResponse
+            intent = assistant_orchestrator.classify(normalized_query, deep_requested=deep)
 
-                    payload = QueryResponse(**response)
-                    asyncio.create_task(asyncio.to_thread(log_query_result, payload, "public"))
-                except Exception:
-                    pass
+            if current_task and not current_task.done():
+                current_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await current_task
+                await _send_json(
+                    websocket,
+                    {
+                        "status": "interrupted",
+                        "message": friday_personality.stopping_response(),
+                    },
+                )
 
-                # Send complete response
-                await _send_json(websocket, {
-                    "status": "complete",
-                    "data": response,
-                    "progress": 100,
-                    "message": "Analysis complete",
-                })
+            await _send_json(
+                websocket,
+                {
+                    "status": "assistant",
+                    "message": intent.opening_line,
+                    "mode": intent.mode,
+                    "intent": intent.kind,
+                },
+            )
 
-            except asyncio.TimeoutError:
-                await _send_json(websocket, {
-                    "status": "error",
-                    "error": {"message": "Analysis timed out"},
-                })
-            except Exception as e:
-                logger.error(f"Pipeline error: {e}", exc_info=True)
-                await _send_json(websocket, {
-                    "status": "error",
-                    "error": {"message": f"Analysis failed: {str(e)}"},
-                })
+            current_task = asyncio.create_task(
+                _handle_query(
+                    websocket,
+                    normalized_query,
+                    deep=deep,
+                    intent=intent,
+                )
+            )
+            
+            # Start news streamer for news intent
+            if intent.kind == "news":
+                asyncio.create_task(_news_streamer(websocket, normalized_query))
 
     except WebSocketDisconnect:
         logger.info("WebSocket client disconnected: /ws/stream")
-    except Exception as e:
-        logger.error(f"WebSocket error: {e}", exc_info=True)
+    except Exception as exc:
+        logger.error("WebSocket error: %s", exc, exc_info=True)
+    finally:
+        if current_task and not current_task.done():
+            current_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await current_task
 
-
-# ---- Voice WebSocket ----
 
 @ws_router.websocket("/ws/voice")
-async def ws_voice(websocket: WebSocket):
-    """
-    Voice WebSocket: receives audio bytes, returns text + audio response.
-
-    Flow: Audio bytes -> STT -> Pipeline -> TTS -> Audio bytes
-    """
+async def ws_voice(websocket: WebSocket) -> None:
+    """Voice endpoint kept for raw-audio clients."""
     await websocket.accept()
     logger.info("WebSocket client connected: /ws/voice")
 
     try:
         while True:
-            # Receive audio bytes
             audio_bytes = await websocket.receive_bytes()
-
             if not audio_bytes:
                 continue
 
-            try:
-                # Progress: Listening received
-                await _send_json(websocket, {
-                    "status": "processing",
-                    "stage": "transcribing",
-                    "progress": 20,
-                    "message": "Transcribing speech...",
-                })
-
-                # STT
-                text = await transcribe(audio_bytes)
-
-                if not text:
-                    await _send_json(websocket, {
+            await _send_progress(websocket, "transcribing", 20, "Listening...")
+            text = await transcribe(audio_bytes)
+            if not text:
+                await _send_json(
+                    websocket,
+                    {
                         "status": "error",
                         "error": {"message": "Could not transcribe audio"},
-                    })
-                    continue
+                    },
+                )
+                continue
 
-                await _send_json(websocket, {
-                    "status": "processing",
-                    "stage": "processing",
-                    "progress": 40,
-                    "message": f"Processing: {text}",
+            intent = assistant_orchestrator.classify(text)
+            await _send_json(
+                websocket,
+                {
+                    "status": "assistant",
+                    "message": intent.opening_line,
+                    "mode": intent.mode,
+                    "intent": intent.kind,
                     "transcription": text,
-                })
+                },
+            )
 
-                # Run fast pipeline
-                response = await fast_pipeline(text)
+            response = await assistant_orchestrator.execute(text)
+            summary = response.get("summary", "Ready, Boss.")
+            await _send_progress(websocket, "speaking", 85, "Talking back...")
+            speech_bytes = await speak(summary)
 
-                await _send_json(websocket, {
-                    "status": "processing",
-                    "stage": "speaking",
-                    "progress": 80,
-                    "message": "Generating speech...",
-                })
-
-                # TTS
-                summary = response.get("summary", "Analysis complete")
-                speech_bytes = await speak(summary)
-
-                # Send text response
-                await _send_json(websocket, {
+            await _send_json(
+                websocket,
+                {
                     "status": "complete",
                     "data": response,
                     "progress": 100,
-                    "message": "Complete",
+                    "message": summary,
                     "transcription": text,
-                    "has_audio": len(speech_bytes) > 0,
-                })
-
-                # Send audio response as bytes
-                if speech_bytes:
-                    await websocket.send_bytes(speech_bytes)
-
-            except Exception as e:
-                logger.error(f"Voice pipeline error: {e}", exc_info=True)
-                await _send_json(websocket, {
-                    "status": "error",
-                    "error": {"message": f"Voice processing failed: {str(e)}"},
-                })
+                    "has_audio": bool(speech_bytes),
+                },
+            )
+            if speech_bytes:
+                await websocket.send_bytes(speech_bytes)
 
     except WebSocketDisconnect:
         logger.info("WebSocket client disconnected: /ws/voice")
-    except Exception as e:
-        logger.error(f"Voice WebSocket error: {e}", exc_info=True)
+    except Exception as exc:
+        logger.error("Voice websocket error: %s", exc, exc_info=True)

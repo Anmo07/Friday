@@ -19,6 +19,15 @@
 - [package.json](file://veritas-ai/frontend/package.json)
 </cite>
 
+## Update Summary
+**Changes Made**
+- Enhanced Dashboard component with new voice-controlled interface featuring central 'voice orb'
+- Added state-based animations for listening (cyan pulse), processing (purple pulse), and speaking (pink pulse)
+- Integrated real-time status indicators with holographic scan effects
+- Improved TruthGauge integration with enhanced visual feedback
+- Added neon pulse animations and advanced styling patterns
+- Updated component composition strategies to support voice-enabled interactions
+
 ## Table of Contents
 1. [Introduction](#introduction)
 2. [Project Structure](#project-structure)
@@ -32,10 +41,10 @@
 10. [Appendices](#appendices)
 
 ## Introduction
-This document describes the Next.js dashboard application for the Veritas AI platform. It focuses on the main dashboard interface and specialized pages, covering the global layout and navigation, real-time truth scoring visualization, claim analysis interface, trend monitoring displays, the TruthGauge component, WebSocket integration via a custom hook, and the developers, feedback, and timeline pages. It also documents responsive design patterns, grid layouts, and component composition strategies used across the dashboard ecosystem.
+This document describes the Next.js dashboard application for the Veritas AI platform. It focuses on the main dashboard interface and specialized pages, covering the global layout and navigation, enhanced voice-controlled interface with central 'voice orb', real-time truth scoring visualization, claim analysis interface, trend monitoring displays, the TruthGauge component, WebSocket integration via a custom hook, and the developers, feedback, and timeline pages. It also documents responsive design patterns, grid layouts, and component composition strategies used across the dashboard ecosystem.
 
 ## Project Structure
-The dashboard is a Next.js application with a strict file-per-page structure under the app directory, shared components in components/, reusable hooks in hooks/, typed API contracts in types/, and service utilities in services/. Tailwind CSS provides styling and glassmorphism effects, while TypeScript ensures type safety.
+The dashboard is a Next.js application with a strict file-per-page structure under the app directory, shared components in components/, reusable hooks in hooks/, typed API contracts in types/, and service utilities in services/. Tailwind CSS provides styling and glassmorphism effects, while TypeScript ensures type safety. The enhanced dashboard now features a sophisticated voice-controlled interface with state-based animations and real-time visual feedback.
 
 ```mermaid
 graph TB
@@ -84,26 +93,26 @@ NC --> L
 - [page.tsx (Feedback):1-175](file://veritas-ai/frontend/app/feedback/page.tsx#L1-L175)
 - [page.tsx (Timeline):1-128](file://veritas-ai/frontend/app/timeline/page.tsx#L1-L128)
 - [Navbar.tsx:1-52](file://veritas-ai/frontend/components/Navbar.tsx#L1-L52)
-- [Dashboard.tsx:1-312](file://veritas-ai/frontend/components/Dashboard.tsx#L1-L312)
+- [Dashboard.tsx:1-393](file://veritas-ai/frontend/components/Dashboard.tsx#L1-L393)
 - [TruthGauge.tsx:1-52](file://veritas-ai/frontend/components/TruthGauge.tsx#L1-L52)
 - [useWebSocket.ts:1-143](file://veritas-ai/frontend/hooks/useWebSocket.ts#L1-L143)
 - [api.ts:1-32](file://veritas-ai/frontend/services/api.ts#L1-L32)
 - [api.ts (types):1-66](file://veritas-ai/frontend/types/api.ts#L1-L66)
-- [globals.css:1-85](file://veritas-ai/frontend/app/globals.css#L1-L85)
+- [globals.css:1-219](file://veritas-ai/frontend/app/globals.css#L1-L219)
 - [tailwind.config.ts:1-24](file://veritas-ai/frontend/tailwind.config.ts#L1-L24)
 - [next.config.mjs:1-8](file://veritas-ai/frontend/next.config.mjs#L1-L8)
 
 **Section sources**
 - [layout.tsx:1-25](file://veritas-ai/frontend/app/layout.tsx#L1-L25)
-- [globals.css:1-85](file://veritas-ai/frontend/app/globals.css#L1-L85)
+- [globals.css:1-219](file://veritas-ai/frontend/app/globals.css#L1-L219)
 - [tailwind.config.ts:1-24](file://veritas-ai/frontend/tailwind.config.ts#L1-L24)
 - [next.config.mjs:1-8](file://veritas-ai/frontend/next.config.mjs#L1-L8)
 - [package.json:1-27](file://veritas-ai/frontend/package.json#L1-L27)
 
 ## Core Components
 - Global Layout and Navigation: The root layout defines the HTML shell, global CSS, and embeds the fixed navbar. The navbar provides navigation across dashboard, timeline, feedback, and developers pages.
-- Dashboard Page: Renders the main interactive interface for claim analysis with voice input, real-time progress, alerts, and truth visualization.
-- TruthGauge: A reusable SVG-based gauge that visualizes truth scores with color-coded confidence thresholds.
+- Enhanced Dashboard Page: Renders the main interactive interface for claim analysis with voice input, central 'voice orb' with state-based animations, real-time progress, alerts, and truth visualization.
+- TruthGauge: A reusable SVG-based gauge that visualizes truth scores with color-coded confidence thresholds and enhanced visual feedback.
 - WebSocket Hook: Provides real-time streaming via WebSocket, managing connection lifecycle, reconnection, and state for progress, alerts, and results.
 - Specialized Pages: Developers page for API reference and pricing, Feedback page for user insights, Timeline page for historical analysis.
 
@@ -111,7 +120,7 @@ NC --> L
 - [layout.tsx:1-25](file://veritas-ai/frontend/app/layout.tsx#L1-L25)
 - [Navbar.tsx:1-52](file://veritas-ai/frontend/components/Navbar.tsx#L1-L52)
 - [page.tsx (Dashboard):1-17](file://veritas-ai/frontend/app/dashboard/page.tsx#L1-L17)
-- [Dashboard.tsx:1-312](file://veritas-ai/frontend/components/Dashboard.tsx#L1-L312)
+- [Dashboard.tsx:1-393](file://veritas-ai/frontend/components/Dashboard.tsx#L1-L393)
 - [TruthGauge.tsx:1-52](file://veritas-ai/frontend/components/TruthGauge.tsx#L1-L52)
 - [useWebSocket.ts:1-143](file://veritas-ai/frontend/hooks/useWebSocket.ts#L1-L143)
 - [page.tsx (Developers):1-153](file://veritas-ai/frontend/app/developers/page.tsx#L1-L153)
@@ -119,9 +128,9 @@ NC --> L
 - [page.tsx (Timeline):1-128](file://veritas-ai/frontend/app/timeline/page.tsx#L1-L128)
 
 ## Architecture Overview
-The dashboard follows a layered architecture:
-- Presentation Layer: Next.js app directory pages and shared components.
-- Domain Layer: Dashboard logic orchestrates WebSocket messages, speech recognition, and voice synthesis.
+The dashboard follows a layered architecture with enhanced voice control capabilities:
+- Presentation Layer: Next.js app directory pages and shared components with sophisticated visual feedback.
+- Domain Layer: Dashboard logic orchestrates WebSocket messages, speech recognition, voice synthesis, and the central voice orb interface.
 - Integration Layer: Services encapsulate API base URLs and helpers; types define contracts for WebSocket and HTTP payloads.
 - Infrastructure: Tailwind CSS for styling, Next.js runtime, and browser APIs (WebSocket, SpeechRecognition, SpeechSynthesis).
 
@@ -152,7 +161,7 @@ APIService --> TypesAPI
 - [layout.tsx:1-25](file://veritas-ai/frontend/app/layout.tsx#L1-L25)
 - [Navbar.tsx:1-52](file://veritas-ai/frontend/components/Navbar.tsx#L1-L52)
 - [page.tsx (Dashboard):1-17](file://veritas-ai/frontend/app/dashboard/page.tsx#L1-L17)
-- [Dashboard.tsx:1-312](file://veritas-ai/frontend/components/Dashboard.tsx#L1-L312)
+- [Dashboard.tsx:1-393](file://veritas-ai/frontend/components/Dashboard.tsx#L1-L393)
 - [TruthGauge.tsx:1-52](file://veritas-ai/frontend/components/TruthGauge.tsx#L1-L52)
 - [useWebSocket.ts:1-143](file://veritas-ai/frontend/hooks/useWebSocket.ts#L1-L143)
 - [api.ts:1-32](file://veritas-ai/frontend/services/api.ts#L1-L32)
@@ -184,15 +193,16 @@ P-->>U : Display page content
 - [layout.tsx:1-25](file://veritas-ai/frontend/app/layout.tsx#L1-L25)
 - [Navbar.tsx:1-52](file://veritas-ai/frontend/components/Navbar.tsx#L1-L52)
 
-### Dashboard Page and Claim Analysis Interface
+### Enhanced Dashboard Page and Voice-Controlled Interface
 - The dashboard page wraps the Dashboard component with a centered container and a title area.
-- Dashboard orchestrates:
+- Enhanced Dashboard orchestrates:
+  - Central 'voice orb' with state-based animations (listening/pulsing cyan, processing/purple, speaking/pink)
   - Voice input via Web Speech Recognition (continuous, interim results).
   - Manual text input with Enter-to-execute.
   - Real-time progress bar and stage indicators driven by WebSocket messages.
   - Alerts display for anomalies.
   - Truth visualization using TruthGauge and confidence breakdown cards.
-  - Summary rendering and “Why True/False” explanations.
+  - Summary rendering and "Why True/False" explanations with voice synthesis.
 
 ```mermaid
 sequenceDiagram
@@ -201,7 +211,7 @@ participant D as "Dashboard.tsx"
 participant H as "useWebSocket.ts"
 participant S as "WebSocket Server"
 participant G as "TruthGauge.tsx"
-U->>D : Speak or type query
+U->>D : Speak or click voice orb
 D->>H : sendQuery(query)
 H->>S : WebSocket send {query}
 S-->>H : progress/status messages
@@ -212,34 +222,65 @@ D-->>U : Live UI updates, alerts, summary
 
 **Diagram sources**
 - [page.tsx (Dashboard):1-17](file://veritas-ai/frontend/app/dashboard/page.tsx#L1-L17)
-- [Dashboard.tsx:1-312](file://veritas-ai/frontend/components/Dashboard.tsx#L1-L312)
+- [Dashboard.tsx:1-393](file://veritas-ai/frontend/components/Dashboard.tsx#L1-L393)
 - [useWebSocket.ts:1-143](file://veritas-ai/frontend/hooks/useWebSocket.ts#L1-L143)
 - [TruthGauge.tsx:1-52](file://veritas-ai/frontend/components/TruthGauge.tsx#L1-L52)
 
 **Section sources**
 - [page.tsx (Dashboard):1-17](file://veritas-ai/frontend/app/dashboard/page.tsx#L1-L17)
-- [Dashboard.tsx:1-312](file://veritas-ai/frontend/components/Dashboard.tsx#L1-L312)
+- [Dashboard.tsx:1-393](file://veritas-ai/frontend/components/Dashboard.tsx#L1-L393)
 
-### TruthGauge Component
-- Renders a circular SVG gauge representing the truth score percentage.
-- Color transitions based on thresholds:
-  - Green for high confidence.
-  - Yellow for moderate confidence.
-  - Red for low confidence.
-- Uses animated stroke dashoffset to visualize progress and applies drop shadows for a glowing effect.
+### Voice Orb Interface
+- The central voice orb serves as the primary interface for voice-controlled interactions.
+- State-based animations:
+  - Listening state: Cyan pulse animation with pulsing glow effect
+  - Processing state: Purple pulse animation with orbital motion
+  - Speaking state: Pink pulse animation with rapid pulse cycle
+  - Idle state: Subtle gray border with hover effects
+- Inner ring animation creates a ping effect during processing states.
+- Icon changes based on state: Mic/MicOff for listening, Brain for processing, Volume for speaking.
 
 ```mermaid
 flowchart TD
-Start(["Render TruthGauge"]) --> GetScore["Read score prop"]
+Start(["Voice Orb State Detection"]) --> CheckListening{"isListening?"}
+CheckListening --> |Yes| CheckSpeaking{"isSpeaking?"}
+CheckListening --> |No| CheckProcessing{"isProcessing?"}
+CheckSpeaking --> |Yes| SetSpeaking["Set speaking state<br/>Pink glow + volume icon"]
+CheckSpeaking --> |No| SetIdle["Set idle state<br/>Gray border + hover"]
+CheckProcessing --> |Yes| SetProcessing["Set processing state<br/>Purple glow + brain icon"]
+CheckProcessing --> |No| SetIdle
+SetSpeaking --> Render["Apply styles and animations"]
+SetProcessing --> Render
+SetIdle --> Render
+```
+
+**Diagram sources**
+- [Dashboard.tsx:127-154](file://veritas-ai/frontend/components/Dashboard.tsx#L127-L154)
+
+**Section sources**
+- [Dashboard.tsx:127-194](file://veritas-ai/frontend/components/Dashboard.tsx#L127-L194)
+
+### Enhanced TruthGauge Component
+- Renders a circular SVG gauge representing the truth score percentage with enhanced visual feedback.
+- Color transitions based on thresholds:
+  - Green for high confidence (cyan glow).
+  - Purple for moderate confidence (purple glow).
+  - Red for low confidence (pink glow).
+- Uses animated stroke dashoffset to visualize progress with enhanced drop shadows for glowing effects.
+- Integrated with voice orb state for synchronized visual feedback.
+
+```mermaid
+flowchart TD
+Start(["Enhanced TruthGauge"]) --> GetScore["Read score prop"]
 GetScore --> CalcPercent["Compute percentage"]
 CalcPercent --> Thresholds{"Threshold check"}
-Thresholds --> |>= 75%| Green["Set green color<br/>and green glow"]
-Thresholds --> |>= 40%| Yellow["Set yellow color<br/>and yellow glow"]
-Thresholds --> |< 40%| Red["Set red color<br/>and red glow"]
-Green --> Draw["Draw SVG circle with strokeDashoffset"]
-Yellow --> Draw
+Thresholds --> |>= 75%| Green["Set cyan color<br/>and cyan glow"]
+Thresholds --> |>= 40%| Purple["Set purple color<br/>and purple glow"]
+Thresholds --> |< 40%| Red["Set pink color<br/>and pink glow"]
+Green --> Draw["Draw SVG circle with enhanced strokeDashoffset"]
+Purple --> Draw
 Red --> Draw
-Draw --> End(["Display percentage and label"])
+Draw --> End(["Display percentage with neon glow"])
 ```
 
 **Diagram sources**
@@ -371,7 +412,7 @@ T-->>U : Show expanded summary
   - useWebSocket depends on services/api.ts for WebSocket URL and types/api.ts for message contracts.
   - Pages depend on services/api.ts for API base URL and types for typing.
 - Styling Cohesion:
-  - globals.css centralizes theme tokens, glassmorphism, gradients, ambient glows, grid pattern, and animations.
+  - globals.css centralizes theme tokens, glassmorphism, gradients, ambient glows, grid pattern, and animations including new voice orb effects.
   - tailwind.config.ts extends color palette aligned with the theme.
 - Build and Runtime:
   - next.config.mjs configures standalone output and disables strict mode.
@@ -394,7 +435,7 @@ Pkg["package.json"] --> NextCfg
 ```
 
 **Diagram sources**
-- [Dashboard.tsx:1-312](file://veritas-ai/frontend/components/Dashboard.tsx#L1-L312)
+- [Dashboard.tsx:1-393](file://veritas-ai/frontend/components/Dashboard.tsx#L1-L393)
 - [TruthGauge.tsx:1-52](file://veritas-ai/frontend/components/TruthGauge.tsx#L1-L52)
 - [useWebSocket.ts:1-143](file://veritas-ai/frontend/hooks/useWebSocket.ts#L1-L143)
 - [api.ts:1-32](file://veritas-ai/frontend/services/api.ts#L1-L32)
@@ -404,17 +445,17 @@ Pkg["package.json"] --> NextCfg
 - [page.tsx (Developers):1-153](file://veritas-ai/frontend/app/developers/page.tsx#L1-L153)
 - [page.tsx (Feedback):1-175](file://veritas-ai/frontend/app/feedback/page.tsx#L1-L175)
 - [page.tsx (Timeline):1-128](file://veritas-ai/frontend/app/timeline/page.tsx#L1-L128)
-- [globals.css:1-85](file://veritas-ai/frontend/app/globals.css#L1-L85)
+- [globals.css:1-219](file://veritas-ai/frontend/app/globals.css#L1-L219)
 - [tailwind.config.ts:1-24](file://veritas-ai/frontend/tailwind.config.ts#L1-L24)
 - [next.config.mjs:1-8](file://veritas-ai/frontend/next.config.mjs#L1-L8)
 - [package.json:1-27](file://veritas-ai/frontend/package.json#L1-L27)
 
 **Section sources**
-- [Dashboard.tsx:1-312](file://veritas-ai/frontend/components/Dashboard.tsx#L1-L312)
+- [Dashboard.tsx:1-393](file://veritas-ai/frontend/components/Dashboard.tsx#L1-L393)
 - [useWebSocket.ts:1-143](file://veritas-ai/frontend/hooks/useWebSocket.ts#L1-L143)
 - [api.ts:1-32](file://veritas-ai/frontend/services/api.ts#L1-L32)
 - [api.ts (types):1-66](file://veritas-ai/frontend/types/api.ts#L1-L66)
-- [globals.css:1-85](file://veritas-ai/frontend/app/globals.css#L1-L85)
+- [globals.css:1-219](file://veritas-ai/frontend/app/globals.css#L1-L219)
 - [tailwind.config.ts:1-24](file://veritas-ai/frontend/tailwind.config.ts#L1-L24)
 - [next.config.mjs:1-8](file://veritas-ai/frontend/next.config.mjs#L1-L8)
 - [package.json:1-27](file://veritas-ai/frontend/package.json#L1-L27)
@@ -426,12 +467,12 @@ Pkg["package.json"] --> NextCfg
 - Rendering Optimizations:
   - TruthGauge uses SVG and minimal DOM updates; consider memoizing props if reused frequently.
   - Dashboard batches UI updates from WebSocket messages; avoid unnecessary re-renders by keeping payloads normalized.
+  - Voice orb animations use CSS keyframes for optimal performance.
 - Network Resilience:
   - API base URL normalization and protocol detection ensure compatibility across environments.
 - Styling:
   - Glassmorphism and backdrop filters are visually intensive; ensure GPU acceleration is available and avoid excessive blur on lower-end devices.
-
-[No sources needed since this section provides general guidance]
+  - New animations use hardware-accelerated properties (transform, opacity) for smooth performance.
 
 ## Troubleshooting Guide
 - WebSocket Not Connecting:
@@ -443,23 +484,28 @@ Pkg["package.json"] --> NextCfg
 - Voice Recognition Issues:
   - Ensure SpeechRecognition is available and enabled; handle fallbacks gracefully.
   - Check microphone permissions and device availability.
+  - Voice orb may not animate if speech recognition fails to initialize.
+- Voice Synthesis Problems:
+  - Verify SpeechSynthesis API availability in the browser.
+  - Check audio permissions and device availability.
 - Timeline Loading Errors:
   - Validate /history endpoint availability and response shape match HistoryResponse.
 - Styling Glitches:
   - Confirm Tailwind content paths include components and app directories.
   - Ensure globals.css is imported in layout.tsx and theme colors align with tailwind.config.ts.
+- Animation Issues:
+  - Verify CSS keyframes for orb-pulse, neon-pulse, and fadeUp animations are properly defined.
+  - Check that animation-duration and timing-function values are compatible with hardware acceleration.
 
 **Section sources**
 - [useWebSocket.ts:1-143](file://veritas-ai/frontend/hooks/useWebSocket.ts#L1-L143)
 - [api.ts:1-32](file://veritas-ai/frontend/services/api.ts#L1-L32)
 - [page.tsx (Timeline):1-128](file://veritas-ai/frontend/app/timeline/page.tsx#L1-L128)
-- [globals.css:1-85](file://veritas-ai/frontend/app/globals.css#L1-L85)
+- [globals.css:1-219](file://veritas-ai/frontend/app/globals.css#L1-L219)
 - [tailwind.config.ts:1-24](file://veritas-ai/frontend/tailwind.config.ts#L1-L24)
 
 ## Conclusion
-The dashboard integrates a modern, responsive UI with real-time streaming, voice-enabled interaction, and comprehensive truth visualization. The modular component architecture, centralized services, and robust WebSocket handling enable scalable development and maintenance. Specialized pages for developers, feedback, and timeline complement the core dashboard, delivering a complete analytical and integrative platform.
-
-[No sources needed since this section summarizes without analyzing specific files]
+The dashboard integrates a modern, responsive UI with enhanced voice-controlled interactions, real-time streaming, sophisticated visual feedback through the central voice orb, and comprehensive truth visualization. The modular component architecture, centralized services, and robust WebSocket handling enable scalable development and maintenance. The new voice orb interface provides intuitive control with state-based animations and real-time status indicators. Specialized pages for developers, feedback, and timeline complement the core dashboard, delivering a complete analytical and integrative platform with advanced voice interaction capabilities.
 
 ## Appendices
 
@@ -473,25 +519,47 @@ The dashboard integrates a modern, responsive UI with real-time streaming, voice
   - Hover and active states with subtle transitions and glow effects.
 - Animations:
   - Fade-in and slide-in animations for content appearance.
+  - Hardware-accelerated animations for smooth voice orb interactions.
 
 **Section sources**
-- [Dashboard.tsx:228-310](file://veritas-ai/frontend/components/Dashboard.tsx#L228-L310)
+- [Dashboard.tsx:228-393](file://veritas-ai/frontend/components/Dashboard.tsx#L228-L393)
 - [page.tsx (Developers):113-135](file://veritas-ai/frontend/app/developers/page.tsx#L113-L135)
 - [page.tsx (Timeline):77-124](file://veritas-ai/frontend/app/timeline/page.tsx#L77-L124)
-- [globals.css:1-85](file://veritas-ai/frontend/app/globals.css#L1-L85)
+- [globals.css:1-219](file://veritas-ai/frontend/app/globals.css#L1-L219)
 
 ### Component Composition Strategies
 - Orchestration:
-  - Dashboard composes TruthGauge, useWebSocket, and browser APIs to deliver a cohesive experience.
+  - Dashboard composes TruthGauge, useWebSocket, browser APIs, and voice orb for a cohesive experience.
 - Reusability:
   - TruthGauge is self-contained and reusable across pages.
 - Type Safety:
   - Strongly typed WebSocketMessage and QueryResponse reduce runtime errors.
 - Styling Consistency:
   - Shared CSS utilities (glass, gradient-text, ambient-glow) unify the look and feel.
+- Voice Integration:
+  - Central voice orb coordinates with WebSocket state and TruthGauge visualization.
+  - State-based animations provide immediate visual feedback for user actions.
 
 **Section sources**
-- [Dashboard.tsx:1-312](file://veritas-ai/frontend/components/Dashboard.tsx#L1-L312)
+- [Dashboard.tsx:1-393](file://veritas-ai/frontend/components/Dashboard.tsx#L1-L393)
 - [TruthGauge.tsx:1-52](file://veritas-ai/frontend/components/TruthGauge.tsx#L1-L52)
 - [api.ts (types):56-66](file://veritas-ai/frontend/types/api.ts#L56-L66)
 - [globals.css:20-34](file://veritas-ai/frontend/app/globals.css#L20-L34)
+
+### Voice Control Features
+- Speech Recognition:
+  - Continuous speech recognition with interim results for real-time transcription.
+  - Automatic query submission when speech recognition ends.
+- Voice Synthesis:
+  - Text-to-speech synthesis for vocalized output with voice selection.
+  - Automatic cancellation of previous speech when new content arrives.
+- Visual Feedback:
+  - Voice orb state changes reflect current voice activity.
+  - Real-time progress indicators during processing stages.
+- Accessibility:
+  - Keyboard navigation support for manual text input.
+  - Screen reader friendly status indicators and progress bars.
+
+**Section sources**
+- [Dashboard.tsx:34-122](file://veritas-ai/frontend/components/Dashboard.tsx#L34-L122)
+- [globals.css:102-132](file://veritas-ai/frontend/app/globals.css#L102-L132)

@@ -6,9 +6,9 @@ export default function DashboardPage() {
     <main className="min-h-screen pt-24 pb-12 px-6 w-full max-w-7xl mx-auto flex flex-col items-center gap-8">
       <div className="flex flex-col items-center gap-2 mb-4">
         <h1 className="text-3xl font-bold text-white">
-          Intelligence <span className="gradient-text">Console</span>
+          FRIDAY <span className="gradient-text">Assistant</span>
         </h1>
-        <p className="text-gray-500 text-sm">Voice-activated multi-agent truth verification</p>
+        <p className="text-gray-500 text-sm">Always-listening voice control, fast actions, deeper verification when needed.</p>
       </div>
       <Dashboard />
     </main>

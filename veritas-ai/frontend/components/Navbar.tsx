@@ -5,7 +5,7 @@ import { Shield, BarChart3, Clock, MessageSquare, Code2 } from "lucide-react";
 
 const navItems = [
   { href: "/", label: "Home", icon: Shield },
-  { href: "/dashboard", label: "Intelligence", icon: BarChart3 },
+  { href: "/dashboard", label: "Assistant", icon: BarChart3 },
   { href: "/timeline", label: "Timeline", icon: Clock },
   { href: "/feedback", label: "Feedback", icon: MessageSquare },
   { href: "/developers", label: "API", icon: Code2 },
@@ -22,7 +22,7 @@ export default function Navbar() {
             <Shield className="w-4 h-4 text-white" />
           </div>
           <span className="font-bold font-mono uppercase tracking-wider text-lg text-white">
-            Veritas<span className="text-cyan-400 neon-text">AI</span>
+            FRIDAY<span className="text-cyan-400 neon-text">AI</span>
           </span>
         </Link>
 

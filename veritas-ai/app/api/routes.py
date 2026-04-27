@@ -8,10 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from app.core.config import settings
+from app.core.assistant import assistant_orchestrator
 from app.core.cache import cache
-from app.core.router import route, RouteDecision
-from app.pipeline.fast_pipeline import fast_pipeline
-from app.pipeline.deep_pipeline import deep_pipeline
 
 logger = logging.getLogger(__name__)
 
@@ -45,28 +43,23 @@ def _get_owner_email(api_key: str, request: Request) -> str:
 
 async def _resolve_query(query: str, deep: bool = False, owner_email: str = "public") -> dict:
     """Run query through pipeline with caching."""
+    intent = assistant_orchestrator.classify(query, deep_requested=deep)
+
     # Check cache first
-    cached = await cache.get(query)
-    if cached is not None:
-        cached["_cached"] = True
-        return cached
+    if intent.kind in {"chat", "verification"}:
+        cached = await cache.get(query)
+        if cached is not None:
+            cached["_cached"] = True
+            return cached
 
     start = time.monotonic()
-
-    if deep:
-        response = await deep_pipeline(query)
-    else:
-        # Use router to decide
-        decision = route(query)
-        if decision == RouteDecision.DEEP:
-            response = await deep_pipeline(query)
-        else:
-            response = await fast_pipeline(query)
+    response = await assistant_orchestrator.execute(query, deep_requested=deep)
 
     response["latency_ms"] = round((time.monotonic() - start) * 1000, 1)
 
     # Cache result
-    await cache.set(query, response)
+    if intent.kind in {"chat", "verification"}:
+        await cache.set(query, response)
 
     # Log to history (non-blocking)
     try:
