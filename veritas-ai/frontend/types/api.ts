@@ -16,6 +16,36 @@ export interface Explanation {
   confidence_breakdown: ConfidenceBreakdown;
 }
 
+export interface AgentOutput {
+  agent: string;
+  output: Record<string, any>;
+  latency_ms: number;
+  cached: boolean;
+}
+
+export interface Viewpoint {
+  stance: "supporting" | "questioning" | "neutral" | "opposing";
+  summary: string;
+  confidence: number;
+}
+
+export interface PerspectiveData {
+  viewpoints: Viewpoint[];
+  consensus_level: string;
+}
+
+export interface ContradictionData {
+  contradictions_found: string[];
+  consistency_score: number;
+  conflicting_claims: string[];
+}
+
+export interface CacheStats {
+  query_cache: { size: number; hits: number; misses: number; hit_rate: number };
+  agent_cache: { size: number; hits: number; misses: number; hit_rate: number };
+  embedding_cache: { size: number; hits: number; misses: number; hit_rate: number };
+}
+
 export interface QueryResponse {
   query: string;
   summary: string;
@@ -30,6 +60,8 @@ export interface QueryResponse {
   timestamp: string;
   _cached?: boolean;
   latency_ms?: number;
+  depth_level?: 1 | 2 | 3;
+  cache_stats?: CacheStats;
   assistant_mode?: "assistant" | "verification";
   intent?: "control" | "news" | "verification" | "chat" | "interrupt";
   action?: string;
@@ -61,11 +93,11 @@ export interface HistoryResponse {
 }
 
 export interface WebSocketMessage {
-  status: "session" | "assistant" | "processing" | "complete" | "alert" | "error" | "interrupted";
+  status: "session" | "assistant" | "processing" | "complete" | "alert" | "error" | "interrupted" | "agent_update" | "voice_command";
   stage?: string;
   progress?: number;
   message?: string;
-  data?: QueryResponse | AlertItem;
+  data?: QueryResponse | AlertItem | AgentOutput | Record<string, any>;
   error?: { message: string } | string;
   transcription?: string;
   has_audio?: boolean;
@@ -73,4 +105,7 @@ export interface WebSocketMessage {
   period?: "morning" | "evening" | "neutral";
   mode?: "assistant" | "verification";
   intent?: "control" | "news" | "verification" | "chat" | "interrupt";
+  agent?: string;
+  depth_level?: number;
+  agent_outputs?: Record<string, any>;
 }
