@@ -32,3 +32,6 @@ package-dir = {"" = "veritas-ai"}
 [tool.setuptools.packages.find]
 where = ["veritas-ai"]
 include = ["*"]
+
+[tool.pyrefly]
+search_path = ["veritas-ai"]
