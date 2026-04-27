@@ -15,9 +15,9 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y \
 WORKDIR /app
 
 COPY requirements.txt .
-# Note: For production CPU-only environments, consider:
-# RUN pip install --user torch --index-url https://download.pytorch.org/whl/cpu
+# Force CPU-only torch in container to avoid downloading CUDA runtimes.
 RUN pip install --user --upgrade pip && \
+    pip install --user --index-url https://download.pytorch.org/whl/cpu "torch==2.11.0+cpu" && \
     pip install --user -r requirements.txt
 
 # --- FINAL STAGE ---
