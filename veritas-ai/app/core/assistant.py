@@ -220,8 +220,7 @@ class AssistantOrchestrator:
             )
 
         wants_verification = deep_requested or any(term in lowered for term in VERIFICATION_TERMS)
-        long_query = len(lowered.split()) >= 12
-        if wants_verification or long_query:
+        if wants_verification:
             return AssistantIntent(
                 raw_query=query,
                 normalized_query=normalized,

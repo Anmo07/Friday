@@ -52,13 +52,12 @@ class ConversationLayer:
             full_response = ""
             
             try:
-                # LLM stream for fast conversational response
-                for chunk in self.fast_llm.stream(prompt):
+                # LLM stream for fast conversational response (using async streaming for sub-2s latency)
+                async for chunk in self.fast_llm.astream(prompt):
                     if self.stop_event.is_set():
                         break
                     yield chunk
                     full_response += chunk
-                    await asyncio.sleep(0.01)
                 
                 # Save to memory
                 self.add_memory("assistant", full_response.strip())

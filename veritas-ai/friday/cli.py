@@ -5,8 +5,14 @@ import threading
 import tempfile
 import os
 import subprocess
+import warnings
 import speech_recognition as sr
 import rumps
+
+# Suppress LangChain and Pydantic warnings for a clean terminal interface
+warnings.filterwarnings("ignore", category=UserWarning, module="langchain_core")
+warnings.filterwarnings("ignore", category=UserWarning, module="pydantic")
+warnings.filterwarnings("ignore")
 
 from core.conversation_layer import ConversationLayer
 
@@ -43,10 +49,46 @@ class FridayMenuApp(rumps.App):
         t.start()
         
     def start_background_loop(self):
-        asyncio.set_event_loop(self.loop)
-        self.loop.run_until_complete(self.layer.initialize())
-        print("Hello Boss. FRIDAY online. I'm listening...")
-        self.listen_loop()
+        try:
+            print("Initializing FRIDAY...")
+            asyncio.set_event_loop(self.loop)
+            self.loop.run_until_complete(self.layer.initialize())
+            print("\nHello Boss. FRIDAY online. I'm listening...")
+            print("(You can speak or type your commands here)\n")
+            
+            # Start terminal input thread
+            terminal_thread = threading.Thread(target=self.terminal_loop)
+            terminal_thread.daemon = True
+            terminal_thread.start()
+            
+            self.listen_loop()
+        except Exception as e:
+            print(f"\n[Startup Error]: {e}")
+
+    def terminal_loop(self):
+        # Allow text interaction from the terminal alongside voice
+        while True:
+            try:
+                user_input = input("")
+                if not user_input.strip():
+                    continue
+                if user_input.strip().lower() in ['exit', 'quit', 'stop']:
+                    print("FRIDAY: Shutting down. Goodbye Boss.")
+                    rumps.quit_application()
+                    break
+                
+                # We echo the 'You: ' manually if they type
+                print(f"You (text): {user_input}")
+                
+                # Process text input
+                asyncio.run_coroutine_threadsafe(
+                    self.process_text(user_input), self.loop
+                )
+            except (KeyboardInterrupt, EOFError):
+                rumps.quit_application()
+                break
+            except Exception as e:
+                print(f"Terminal Input Error: {e}")
 
     def toggle_mic(self, sender):
         self.listening = not self.listening
@@ -75,6 +117,9 @@ class FridayMenuApp(rumps.App):
     def listen_loop(self):
         import time
         recognizer = sr.Recognizer()
+        recognizer.energy_threshold = 300  # Set a low base threshold for sensitivity
+        recognizer.dynamic_energy_threshold = True
+        
         try:
             with sr.Microphone() as source:
                 recognizer.adjust_for_ambient_noise(source, duration=1)
@@ -89,6 +134,7 @@ class FridayMenuApp(rumps.App):
                         if not self.listening:
                             continue
                             
+                        print("\n[Voice detected, transcribing...]", flush=True)
                         # Process audio
                         asyncio.run_coroutine_threadsafe(
                             self.process_audio(audio.get_wav_data()), self.loop
@@ -96,24 +142,12 @@ class FridayMenuApp(rumps.App):
                     except sr.WaitTimeoutError:
                         pass
                     except Exception as e:
-                        print(f"STT Listen Error: {e}")
+                        print(f"\n[STT Listen Error]: {e}")
         except Exception as e:
-            print(f"Microphone init failed: {e}")
+            print(f"\n[Microphone init failed]: {e}")
 
-    async def process_audio(self, audio_bytes: bytes):
+    async def process_text(self, text: str):
         try:
-            from app.voice.stt import transcribe
-            text = await transcribe(audio_bytes)
-            if not text or not text.strip():
-                return
-                
-            print(f"\nYou: {text}")
-            
-            # Check for interrupt/exit
-            if text.strip().lower() in ['exit', 'quit', 'stop listening']:
-                rumps.quit_application()
-                return
-                
             full_response = ""
             print("FRIDAY:", end=" ", flush=True)
             async for chunk in self.layer.process_query_stream(text):
@@ -134,7 +168,27 @@ class FridayMenuApp(rumps.App):
                 os.unlink(tmp_path)
                 
         except Exception as e:
-            print(f"Error processing audio: {e}")
+            print(f"\n[Error processing text]: {e}")
+
+    async def process_audio(self, audio_bytes: bytes):
+        try:
+            from app.voice.stt import transcribe
+            text = await transcribe(audio_bytes)
+            if not text or not text.strip():
+                print("[Transcription returned empty]")
+                return
+                
+            print(f"You: {text}")
+            
+            # Check for interrupt/exit
+            if text.strip().lower() in ['exit', 'quit', 'stop listening']:
+                rumps.quit_application()
+                return
+                
+            await self.process_text(text)
+                
+        except Exception as e:
+            print(f"\n[Error processing audio]: {e}")
 
 def main():
     # Make sure we don't duplicate run loops
