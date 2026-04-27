@@ -9,9 +9,6 @@ from typing import Optional, Callable, Awaitable, Any, Dict
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from config.settings import settings
-from core.cache_layer import query_cache
-from core.history_store import log_query_result
-from core.redis_cache import redis_cache
 from core.adaptive_router import classify_depth, detect_voice_command, DepthLevel
 from core.smart_cache import smart_cache
 from pipelines.event_bus import event_bus
@@ -21,19 +18,45 @@ from pipelines.adaptive_pipeline import run_adaptive_pipeline
 router = APIRouter(prefix="/ws")
 
 
-PROGRESS_STAGES = {
-    "cache_check": "Checking cache...",
-    "routing": "Analyzing query...",
-    "data_collection": "Collecting data from sources...",
-    "parallel_agents": "Running parallel analysis...",
-    "verification": "Verifying sources...",
-    "fact_check": "Cross-referencing facts...",
-    "misinformation": "Detecting misinformation...",
-    "scoring": "Computing truth score...",
-    "generating": "Generating response...",
-    "finalizing": "Finalizing response...",
-    "complete": "Analysis complete",
+# ── Chat-mode patterns (bypass pipeline entirely) ──
+import re
+_CHAT_PATTERN = re.compile(
+    r"^(hi|hello|hey|good\s+(morning|evening|night)|thanks|thank\s+you|"
+    r"bye|goodbye|how\s+are\s+you|what'?s?\s+up|yo|sup|ok|okay|yes|no|"
+    r"got\s+it|sure|cool|nice|great|alright|fine)[\s!?.]*$",
+    re.IGNORECASE,
+)
+
+_CHAT_RESPONSES: Dict[str, str] = {
+    "hi": "Hey Boss, what do you need?",
+    "hello": "Hello! I'm ready.",
+    "hey": "Hey, what's up?",
+    "thanks": "Anytime, Boss.",
+    "thank you": "You got it.",
+    "bye": "Catch you later, Boss.",
+    "goodbye": "Later!",
+    "how are you": "Running smooth. What do you need?",
+    "yo": "Yo. What's the mission?",
+    "ok": "Standing by.",
+    "yes": "Got it.",
+    "no": "Alright.",
+    "sure": "On it.",
+    "cool": "Cool.",
+    "nice": "👍",
+    "great": "Let's keep going.",
 }
+
+
+def _get_chat_response(query: str) -> Optional[str]:
+    """Instant response for simple chat — zero pipeline cost."""
+    normalized = " ".join(query.strip().split()).lower().rstrip("!?.")
+    if _CHAT_PATTERN.match(query.strip()):
+        # Check exact matches first
+        for key, response in _CHAT_RESPONSES.items():
+            if normalized.startswith(key):
+                return response
+        return "I'm listening, Boss."
+    return None
 
 
 async def _send_message(
@@ -46,7 +69,6 @@ async def _send_message(
     progress: Optional[int] = None,
     agent: Optional[str] = None,
     depth_level: Optional[int] = None,
-    agent_outputs: Optional[Dict[str, Any]] = None,
 ):
     payload: Dict[str, Any] = {"status": status}
     if data is not None:
@@ -61,8 +83,6 @@ async def _send_message(
         payload["agent"] = agent
     if depth_level is not None:
         payload["depth_level"] = depth_level
-    if agent_outputs is not None:
-        payload["agent_outputs"] = agent_outputs
     await websocket.send_json(payload)
 
 
@@ -72,9 +92,8 @@ async def _send_progress(
     progress: int,
     custom_message: Optional[str] = None,
 ):
-    message = custom_message or PROGRESS_STAGES.get(stage, stage)
     await _send_message(
-        websocket, status="processing", message=message, progress=progress
+        websocket, status="processing", message=custom_message or stage, progress=progress
     )
 
 
@@ -129,7 +148,7 @@ async def websocket_query_endpoint(websocket: WebSocket):
                 )
                 continue
 
-            # ── Voice command detection ──
+            # ── FAST PATH 1: Voice command (instant) ──
             voice_cmd = detect_voice_command(query)
             if voice_cmd:
                 await _send_message(
@@ -140,93 +159,72 @@ async def websocket_query_endpoint(websocket: WebSocket):
                 )
                 continue
 
-            # ── Phase 8: Smart cache check ──
-            await _send_progress(websocket, "cache_check", 5, "Checking cache...")
+            # ── FAST PATH 2: Simple chat (instant, no pipeline) ──
+            chat_response = _get_chat_response(query)
+            if chat_response:
+                await _send_message(
+                    websocket,
+                    status="complete",
+                    data={
+                        "query": query,
+                        "summary": chat_response,
+                        "facts": [],
+                        "sources": [],
+                        "contradictions": [],
+                        "fake_probability": 0.0,
+                        "confidence_score": 1.0,
+                        "truth_score": 1.0,
+                        "status": "verified",
+                        "timestamp": datetime.utcnow().isoformat() + "Z",
+                        "depth_level": 0,
+                        "latency_ms": round((time.time() - start_time) * 1000, 1),
+                    },
+                    message=chat_response,
+                    depth_level=0,
+                )
+                continue
 
+            # ── FAST PATH 3: Smart cache (in-memory only, <1ms) ──
             cached_result = await smart_cache.get_query(query)
             if cached_result is not None:
                 latency_ms = (time.time() - start_time) * 1000
                 await _send_message(
                     websocket,
-                    status="processing",
-                    message=f"Cache hit! Response in {latency_ms:.0f}ms",
-                    progress=100,
-                )
-                await _send_message(
-                    websocket,
                     status="complete",
                     data=cached_result.model_dump(),
+                    message=f"Cache hit — {latency_ms:.0f}ms",
                     depth_level=1,
                 )
                 continue
 
-            # Also check Redis and local cache
-            redis_cached = await redis_cache.get(query)
-            if redis_cached is not None:
-                latency_ms = (time.time() - start_time) * 1000
-                await _send_message(
-                    websocket,
-                    status="processing",
-                    message=f"Cache hit! Response in {latency_ms:.0f}ms",
-                    progress=100,
-                )
-                await _send_message(
-                    websocket, status="complete", data=redis_cached.model_dump()
-                )
-                continue
-
-            local_cached = query_cache.get(query)
-            if local_cached is not None:
-                latency_ms = (time.time() - start_time) * 1000
-                await _send_message(
-                    websocket,
-                    status="processing",
-                    message=f"Cache hit! Response in {latency_ms:.0f}ms",
-                    progress=100,
-                )
-                await _send_message(
-                    websocket, status="complete", data=local_cached.model_dump()
-                )
-                continue
-
-            # ── Phase 1: Route to adaptive depth ──
+            # ── Route to adaptive depth ──
             depth_decision = classify_depth(query, force_deep=force_deep)
 
             await _send_message(
                 websocket,
                 status="processing",
-                message=f"Depth L{depth_decision.level}: {depth_decision.reasoning}",
+                message=f"L{depth_decision.level}: {depth_decision.reasoning}",
                 progress=15,
                 depth_level=int(depth_decision.level),
             )
 
-            # ── Progress callback ──
+            # ── Progress callback (lightweight) ──
             progress_map = {
-                "cache_check": 10,
-                "routing": 20,
-                "data_collection": 30,
-                "parallel_agents": 50,
-                "verification": 60,
-                "fact_check": 70,
-                "misinformation": 80,
-                "scoring": 85,
-                "generating": 90,
-                "finalizing": 95,
+                "routing": 20, "data_collection": 30, "parallel_agents": 50,
+                "verification": 60, "scoring": 85, "generating": 90,
                 "complete": 100,
             }
 
             async def progress_callback(stage: str, message: str):
-                pct = progress_map.get(stage, 50)
-                await _send_progress(websocket, stage, pct, message)
+                await _send_progress(websocket, stage, progress_map.get(stage, 50), message)
 
-            # ── Phase 3: Stream partial agent results ──
+            # ── Stream callback for partial agent results ──
             async def stream_callback(event: str, agent_name: str, data: Dict[str, Any]):
-                """Stream partial results to client as agents complete."""
                 await _send_message(
                     websocket,
                     status="agent_update",
                     data=data,
-                    message=f"{agent_name} completed",
+                    message=f"{agent_name} done",
                     agent=agent_name,
                     depth_level=int(depth_decision.level),
                 )
@@ -241,28 +239,21 @@ async def websocket_query_endpoint(websocket: WebSocket):
                     progress_callback=progress_callback,
                 )
 
-                # Store in all cache layers
-                await redis_cache.set(query, response)
-                query_cache.set(query, response)
-                await asyncio.to_thread(log_query_result, response)
-
                 latency_ms = (time.time() - start_time) * 1000
 
-                # Send final complete message with enriched data
                 complete_data = response.model_dump()
                 complete_data["depth_level"] = int(depth_decision.level)
                 complete_data["latency_ms"] = round(latency_ms, 1)
-                complete_data["cache_stats"] = smart_cache.get_stats()
 
                 await _send_message(
                     websocket,
                     status="complete",
                     data=complete_data,
-                    message=f"Analysis complete in {latency_ms:.0f}ms (L{depth_decision.level})",
+                    message=f"Done in {latency_ms:.0f}ms (L{depth_decision.level})",
                     depth_level=int(depth_decision.level),
                 )
             except Exception as exc:
-                logging.exception("Adaptive pipeline failed")
+                logging.exception("Pipeline failed")
                 await _send_message(websocket, status="error", error=str(exc))
 
     except WebSocketDisconnect:

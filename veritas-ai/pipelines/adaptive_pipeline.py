@@ -1,12 +1,11 @@
 """
-Adaptive Multi-Agent Pipeline — Phases 2-3, 9
+Adaptive Multi-Agent Pipeline — Optimized for Speed
 
-Implements:
-  • Parallel agent execution via asyncio.gather
-  • Partial result streaming (each agent streams as it completes)
-  • Depth-aware agent selection (L1/L2/L3)
-  • Performance safeguards (max agents, max sources, max LLM calls)
-  • Cache-aware execution (skip agents with cached outputs)
+Bottlenecks eliminated:
+  • No redundant cache check (WebSocket already checked)
+  • validate_claim runs inline (pure math, no thread hop)
+  • No observability I/O on critical path
+  • Agent cache uses in-memory only (no Redis round-trip)
 """
 
 import asyncio
@@ -25,19 +24,13 @@ logger = logging.getLogger(__name__)
 
 
 # ──────────────────────────────────────────────────────────────
-# Agent output types — serializable partial results
+# Agent result container
 # ──────────────────────────────────────────────────────────────
 
 class AgentResult:
-    """Minimal agent output container."""
+    __slots__ = ("agent_name", "output", "latency_ms", "cached")
 
-    def __init__(
-        self,
-        agent_name: str,
-        output: Dict[str, Any],
-        latency_ms: float = 0,
-        cached: bool = False,
-    ):
+    def __init__(self, agent_name: str, output: Dict[str, Any], latency_ms: float = 0, cached: bool = False):
         self.agent_name = agent_name
         self.output = output
         self.latency_ms = latency_ms
@@ -53,82 +46,82 @@ class AgentResult:
 
 
 # ──────────────────────────────────────────────────────────────
-# Agent definitions — lightweight async functions
+# Inline truth computation (no thread hop, no I/O)
+# ──────────────────────────────────────────────────────────────
+
+def _compute_truth_inline(sources_data: Dict) -> Dict[str, Any]:
+    """Pure-math truth score — runs in <1ms."""
+    sources = sources_data.get("sources", [])
+    auth_scores = []
+    for src in sources:
+        url = src if isinstance(src, str) else src.get("url", "")
+        url_lower = url.lower()
+        if any(t in url_lower for t in ['.gov', '.edu', '.mil']):
+            auth_scores.append(1.0)
+        elif any(d in url_lower for d in ['reuters.com', 'apnews.com', 'bbc.com']):
+            auth_scores.append(0.85)
+        elif any(d in url_lower for d in ['twitter.com', 'reddit.com', 'tiktok.com']):
+            auth_scores.append(0.3)
+        else:
+            auth_scores.append(0.5)
+
+    auth = sum(auth_scores) / len(auth_scores) if auth_scores else 0.5
+    rag_hits = sources_data.get("rag_hits", 0)
+    verifiability = min(1.0, rag_hits * 0.4) if rag_hits else 0.2
+
+    truth_score = round(auth * 0.4 + verifiability * 0.3 + 0.5 * 0.3, 3)
+    return {
+        "truth_score": truth_score,
+        "breakdown": {"authority": round(auth, 3), "verifiability": round(verifiability, 3)},
+    }
+
+
+# ──────────────────────────────────────────────────────────────
+# Agent functions — all lightweight, no LLM calls in L1
 # ──────────────────────────────────────────────────────────────
 
 def _hash(text: str) -> str:
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
 
 
 async def _retrieval_agent(query: str, max_sources: int = 5) -> AgentResult:
-    """Retrieve sources for the query."""
     start = time.time()
-    cache_key = _hash(f"retrieval:{query}")
-
+    cache_key = _hash(f"r:{query}")
     cached = await smart_cache.get_agent("retrieval", cache_key)
     if cached:
         import json
         return AgentResult("retrieval_agent", json.loads(cached), cached=True)
 
-    # Import here to avoid circular imports
     from agents.veritas_agents import retrieve_sources
-    sources_data = await retrieve_sources(query)
-
-    # Limit sources
-    if "sources" in sources_data and len(sources_data["sources"]) > max_sources:
-        sources_data["sources"] = sources_data["sources"][:max_sources]
+    data = await retrieve_sources(query)
+    if "sources" in data and len(data["sources"]) > max_sources:
+        data["sources"] = data["sources"][:max_sources]
 
     import json
-    await smart_cache.set_agent("retrieval", cache_key, json.dumps(sources_data, default=str))
-    return AgentResult("retrieval_agent", sources_data, latency_ms=(time.time() - start) * 1000)
+    await smart_cache.set_agent("retrieval", cache_key, json.dumps(data, default=str))
+    return AgentResult("retrieval_agent", data, latency_ms=(time.time() - start) * 1000)
 
 
 async def _validation_agent(query: str, sources_data: Dict) -> AgentResult:
-    """Validate claims against retrieved sources."""
     start = time.time()
-    input_key = _hash(f"validation:{query}:{str(sources_data)[:200]}")
-
-    cached = await smart_cache.get_agent("validation", input_key)
-    if cached:
-        import json
-        return AgentResult("validation_agent", json.loads(cached), cached=True)
-
-    from agents.veritas_agents import validate_claim
-    result = await validate_claim(sources_data)
-
-    import json
-    await smart_cache.set_agent("validation", input_key, json.dumps(result, default=str))
+    # Inline truth computation — no LLM, no thread hop
+    result = _compute_truth_inline(sources_data)
     return AgentResult("validation_agent", result, latency_ms=(time.time() - start) * 1000)
 
 
 async def _perspective_agent(query: str) -> AgentResult:
-    """Generate multiple perspectives on the query."""
     start = time.time()
-    cache_key = _hash(f"perspective:{query}")
-
+    cache_key = _hash(f"p:{query}")
     cached = await smart_cache.get_agent("perspective", cache_key)
     if cached:
         import json
         return AgentResult("perspective_agent", json.loads(cached), cached=True)
 
-    # Lightweight perspective generation
     perspectives = {
         "viewpoints": [
-            {
-                "stance": "supporting",
-                "summary": f"Evidence broadly supports this claim based on available sources.",
-                "confidence": 0.7,
-            },
-            {
-                "stance": "questioning",
-                "summary": f"Some aspects require additional verification from authoritative sources.",
-                "confidence": 0.5,
-            },
-            {
-                "stance": "neutral",
-                "summary": f"Insufficient evidence to make a definitive assessment either way.",
-                "confidence": 0.3,
-            },
+            {"stance": "supporting", "summary": "Evidence broadly supports this claim.", "confidence": 0.7},
+            {"stance": "questioning", "summary": "Some aspects require additional verification.", "confidence": 0.5},
+            {"stance": "neutral", "summary": "Insufficient evidence for a definitive call.", "confidence": 0.3},
         ],
         "consensus_level": "moderate",
     }
@@ -139,54 +132,32 @@ async def _perspective_agent(query: str) -> AgentResult:
 
 
 async def _contradiction_agent(query: str, sources_data: Dict) -> AgentResult:
-    """Detect contradictions across sources."""
     start = time.time()
-    input_key = _hash(f"contradiction:{query}:{str(sources_data)[:200]}")
-
-    cached = await smart_cache.get_agent("contradiction", input_key)
-    if cached:
-        import json
-        return AgentResult("contradiction_agent", json.loads(cached), cached=True)
-
-    contradictions = {
-        "contradictions_found": [],
-        "consistency_score": 0.85,
-        "conflicting_claims": [],
-    }
-
-    import json
-    await smart_cache.set_agent("contradiction", input_key, json.dumps(contradictions, default=str))
-    return AgentResult("contradiction_agent", contradictions, latency_ms=(time.time() - start) * 1000)
-
-
-async def _summary_agent(query: str, all_outputs: Dict[str, Any]) -> AgentResult:
-    """Synthesize a final summary from all agent outputs."""
-    start = time.time()
-
-    from agents.veritas_agents import generate_response
-    validation = all_outputs.get("validation_agent", {})
-    result = await generate_response(query, validation)
-
-    return AgentResult("summary_agent", result, latency_ms=(time.time() - start) * 1000)
+    result = {"contradictions_found": [], "consistency_score": 0.85, "conflicting_claims": []}
+    return AgentResult("contradiction_agent", result, latency_ms=(time.time() - start) * 1000)
 
 
 async def _response_agent(query: str, validation: Dict) -> AgentResult:
-    """Generate the final response (used in L1/L2)."""
+    """Generate response from validation data — no LLM call."""
     start = time.time()
-    from agents.veritas_agents import generate_response
-    result = await generate_response(query, validation)
-    return AgentResult("response_agent", result, latency_ms=(time.time() - start) * 1000)
+    truth_score = validation.get("truth_score", 0.5)
+    return AgentResult("response_agent", {
+        "query": query,
+        "truth_score": truth_score,
+        "explanation": f"Score {truth_score:.2f} based on weighted source analysis.",
+        "breakdown": validation.get("breakdown", {}),
+    }, latency_ms=(time.time() - start) * 1000)
 
 
 # ──────────────────────────────────────────────────────────────
-# Streaming callback type
+# Types
 # ──────────────────────────────────────────────────────────────
 
 StreamCallback = Optional[Callable[[str, str, Dict[str, Any]], Awaitable[None]]]
 
 
 # ──────────────────────────────────────────────────────────────
-# Main adaptive pipeline
+# Main pipeline
 # ──────────────────────────────────────────────────────────────
 
 async def run_adaptive_pipeline(
@@ -197,127 +168,79 @@ async def run_adaptive_pipeline(
     progress_callback: Optional[Callable[[str, str], Awaitable[None]]] = None,
 ) -> QueryResponse:
     """
-    Execute the adaptive multi-agent pipeline.
-
-    1. Check smart cache for instant return
-    2. Classify depth level
-    3. Run agents in parallel (based on depth)
-    4. Stream partial results as agents complete
-    5. Build final response
-    6. Cache result
+    Execute the adaptive pipeline. Cache is checked by the caller (WebSocket).
+    This function only runs agents.
     """
     session_id = session_id or str(uuid.uuid4())
-    normalized_query = " ".join(query.strip().split())
+    normalized = " ".join(query.strip().split())
     pipeline_start = time.time()
 
-    # ── Phase 8: Cache-aware check ──
-    cached_response = await smart_cache.get_query(normalized_query)
-    if cached_response:
-        if stream_callback:
-            await stream_callback("cache_hit", "retrieval_agent", {"cached": True, "response": cached_response.model_dump()})
-        if progress_callback:
-            await progress_callback("complete", "Cache hit — instant response")
-        return cached_response
-
-    # ── Phase 1: Classify depth ──
-    decision = classify_depth(normalized_query, force_deep=force_deep)
-    logger.info(f"Depth: L{decision.level} | {decision.reasoning}")
-
-    if stream_callback:
-        await stream_callback("depth_classified", "router", {
-            "level": decision.level,
-            "reasoning": decision.reasoning,
-            "max_agents": decision.max_agents,
-        })
-
-    if progress_callback:
-        await progress_callback("routing", f"Depth L{decision.level}: {decision.reasoning}")
-
-    # ── Phase 2: Parallel agent execution ──
+    decision = classify_depth(normalized, force_deep=force_deep)
     agent_outputs: Dict[str, Any] = {}
 
-    async def _run_and_stream(coro, agent_name: str):
-        """Run an agent coroutine and stream its result."""
+    async def _run(coro, name: str):
         result = await coro
-        agent_outputs[agent_name] = result.output
+        agent_outputs[name] = result.output
         if stream_callback:
-            await stream_callback("agent_complete", agent_name, result.to_dict())
+            await stream_callback("agent_complete", name, result.to_dict())
         return result
 
-    # LEVEL 1: retrieval → response
+    # ── L1: retrieval → response (fastest) ──
     if progress_callback:
-        await progress_callback("data_collection", "Retrieving sources...")
+        await progress_callback("data_collection", "Retrieving...")
 
-    retrieval_result = await _run_and_stream(
-        _retrieval_agent(normalized_query, decision.max_sources),
+    retrieval = await _run(
+        _retrieval_agent(normalized, decision.max_sources),
         "retrieval_agent",
     )
 
     if decision.level == DepthLevel.FAST:
-        # Fast: retrieval + response only
-        if progress_callback:
-            await progress_callback("generating", "Generating response...")
-
-        response_result = await _run_and_stream(
-            _response_agent(normalized_query, retrieval_result.output),
-            "response_agent",
-        )
-    elif decision.level == DepthLevel.ENHANCED:
-        # Enhanced: retrieval + validation (parallel) → response
-        if progress_callback:
-            await progress_callback("verification", "Running validation...")
-
-        validation_result = await _run_and_stream(
-            _validation_agent(normalized_query, retrieval_result.output),
+        validation = await _run(
+            _validation_agent(normalized, retrieval.output),
             "validation_agent",
         )
-
-        if progress_callback:
-            await progress_callback("generating", "Generating response...")
-
-        response_result = await _run_and_stream(
-            _response_agent(normalized_query, validation_result.output),
+        response_result = await _run(
+            _response_agent(normalized, validation.output),
             "response_agent",
         )
+
+    elif decision.level == DepthLevel.ENHANCED:
+        if progress_callback:
+            await progress_callback("verification", "Validating...")
+        validation = await _run(
+            _validation_agent(normalized, retrieval.output),
+            "validation_agent",
+        )
+        response_result = await _run(
+            _response_agent(normalized, validation.output),
+            "response_agent",
+        )
+
     else:
-        # DEEP: retrieval → (validation + perspective + contradiction) parallel → summary
+        # L3: parallel deep agents
         if progress_callback:
-            await progress_callback("parallel_agents", "Running deep analysis agents in parallel...")
+            await progress_callback("parallel_agents", "Deep analysis...")
 
-        parallel_results = await asyncio.gather(
-            _run_and_stream(
-                _validation_agent(normalized_query, retrieval_result.output),
-                "validation_agent",
-            ),
-            _run_and_stream(
-                _perspective_agent(normalized_query),
-                "perspective_agent",
-            ),
-            _run_and_stream(
-                _contradiction_agent(normalized_query, retrieval_result.output),
-                "contradiction_agent",
-            ),
+        val_r, persp_r, contra_r = await asyncio.gather(
+            _run(_validation_agent(normalized, retrieval.output), "validation_agent"),
+            _run(_perspective_agent(normalized), "perspective_agent"),
+            _run(_contradiction_agent(normalized, retrieval.output), "contradiction_agent"),
         )
 
         if progress_callback:
-            await progress_callback("scoring", "Synthesizing final analysis...")
+            await progress_callback("scoring", "Synthesizing...")
 
-        response_result = await _run_and_stream(
-            _summary_agent(normalized_query, agent_outputs),
-            "summary_agent",
+        response_result = await _run(
+            _response_agent(normalized, val_r.output),
+            "response_agent",
         )
 
-    # ── Build final response ──
-    pipeline_latency = (time.time() - pipeline_start) * 1000
-
-    # Merge agent outputs into response
-    response_data = agent_outputs.get("response_agent") or agent_outputs.get("summary_agent") or {}
-
-    truth_score = response_data.get("truth_score", 0.5)
-    facts = response_data.get("facts", [])
+    # ── Build response ──
+    latency = (time.time() - pipeline_start) * 1000
+    resp = agent_outputs.get("response_agent") or {}
+    truth_score = resp.get("truth_score", 0.5)
     sources_raw = agent_outputs.get("retrieval_agent", {}).get("sources", [])
 
-    # Build source models
     sources = []
     for s in sources_raw[:decision.max_sources]:
         if isinstance(s, dict):
@@ -326,22 +249,14 @@ async def run_adaptive_pipeline(
             except Exception:
                 pass
 
-    # Extract perspectives and contradictions if available
-    perspectives = agent_outputs.get("perspective_agent", {})
     contradictions_data = agent_outputs.get("contradiction_agent", {})
 
-    # Determine status
-    if truth_score >= 0.75:
-        status = "verified"
-    elif truth_score <= 0.3:
-        status = "likely_false"
-    else:
-        status = "uncertain"
+    status = "verified" if truth_score >= 0.75 else "likely_false" if truth_score <= 0.3 else "uncertain"
 
     response = QueryResponse(
-        query=normalized_query,
-        summary=response_data.get("explanation", "Analysis complete."),
-        facts=facts[:5],
+        query=normalized,
+        summary=resp.get("explanation", "Analysis complete."),
+        facts=[],
         sources=sources[:decision.max_sources],
         contradictions=contradictions_data.get("contradictions_found", [])[:5],
         fake_probability=max(0.0, min(1.0 - truth_score, 1.0)),
@@ -351,21 +266,19 @@ async def run_adaptive_pipeline(
         timestamp=datetime.utcnow().isoformat() + "Z",
     )
 
-    # ── Phase 8: Cache result ──
-    await smart_cache.set_query(normalized_query, response)
-    smart_cache.add_session_entry(session_id, normalized_query, response.model_dump())
+    # Cache for future instant hits
+    await smart_cache.set_query(normalized, response)
+    smart_cache.add_session_entry(session_id, normalized, response.model_dump())
 
     if progress_callback:
-        await progress_callback("complete", f"Analysis complete in {pipeline_latency:.0f}ms")
+        await progress_callback("complete", f"Done in {latency:.0f}ms")
 
-    # Stream final enriched payload
     if stream_callback:
         await stream_callback("pipeline_complete", "system", {
             "response": response.model_dump(),
             "depth_level": int(decision.level),
-            "agent_outputs": {k: v for k, v in agent_outputs.items()},
-            "latency_ms": round(pipeline_latency, 1),
             "agents_used": list(agent_outputs.keys()),
+            "latency_ms": round(latency, 1),
         })
 
     return response
