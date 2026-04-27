@@ -30,7 +30,7 @@ services:
       neo4j-db:
         condition: service_healthy
       chromadb:
-        condition: service_started
+        condition: service_healthy
       redis:
         condition: service_healthy
       ollama:
@@ -95,7 +95,7 @@ services:
   # ChromaDB — Vector Database for RAG
   # =============================================
   chromadb:
-    image: chromadb/chroma:latest
+    image: chromadb/chroma:0.5.5
     container_name: veritas-chromadb
     restart: unless-stopped
     ports:
@@ -104,6 +104,11 @@ services:
       - chroma_data:/chroma/chroma
     networks:
       - veritas-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
@@ -123,7 +128,7 @@ services:
       retries: 5
 
   ollama:
-    image: ollama/ollama:latest
+    image: ollama/ollama:0.3.12
     container_name: veritas-ollama
     restart: unless-stopped
     ports:

@@ -38,14 +38,34 @@ class Settings(BaseSettings):
     ALLOW_ANONYMOUS_WS: bool = True
 
     # ── Public URL hints ─────────────────────────────────────────
-    PUBLIC_API_BASE_URL: str = "http://localhost:8000/api/v1"
-    PUBLIC_WS_BASE_URL: str = "ws://localhost:8000/ws/stream"
+    PUBLIC_API_BASE_URL: str = "http://localhost:8001/api/v1"
+    PUBLIC_WS_BASE_URL: str = "ws://localhost:8001/ws/stream"
 
     # ── Ollama / LLM ─────────────────────────────────────────────
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     MODEL_NAME: str = "llama3"
     ROUTER_MODEL: str = "phi3"
     FAST_MODEL: str = "mistral"
+    OLLAMA_REQUEST_TIMEOUT_SECONDS: int = 120
+    LOCAL_LLM_PROFILE: str = "balanced"
+
+    # ── Voice (local speech pipeline) ────────────────────────────
+    STT_MODEL_SIZE: str = "base"
+    STT_DEVICE: str = "cpu"
+    STT_COMPUTE_TYPE: str = "int8"
+    TTS_PROVIDER: str = "pyttsx3"  # pyttsx3 | edge_tts
+    TTS_VOICE_PROFILE: str = "friday"
+    TTS_SPEECH_RATE: int = 190
+
+    # ── Autonomy safety policy ────────────────────────────────────
+    CONTROL_CONFIRMATION_POLICY: str = "confirm_high_risk"
+    CONTROL_AUDIT_LOG_PATH: str = "./logs/control_audit.log"
+    CONTROL_ALLOW_FULL_AUTO: bool = False
+
+    # ── Internet-aware retrieval ──────────────────────────────────
+    WEB_ENRICHMENT_ENABLED: bool = True
+    WEB_ENRICHMENT_TIMEOUT_SECONDS: int = 4
+    WEB_ENRICHMENT_MAX_RESULTS: int = 3
 
     # ── Vector DB ────────────────────────────────────────────────
     CHROMA_PERSIST_DIRECTORY: str = "./chroma_db"

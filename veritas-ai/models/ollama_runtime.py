@@ -10,7 +10,7 @@ from typing import Any, Iterable, Optional
 import requests
 from langchain_core.language_models.llms import LLM
 
-from config.settings import settings
+from app.core.config import settings
 
 
 logger = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ class OllamaLLM(LLM):
     base_url: str = settings.OLLAMA_BASE_URL
     model: str
     temperature: float = 0.0
-    timeout: int = 120
+    timeout: int = settings.OLLAMA_REQUEST_TIMEOUT_SECONDS
 
     @property
     def _llm_type(self) -> str:

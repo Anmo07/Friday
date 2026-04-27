@@ -13,7 +13,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.core.assistant import AssistantIntent, assistant_orchestrator
 from app.core.cache import cache
-from app.voice.stt import transcribe
+from app.voice.stt import transcribe, transcribe_stream
 from app.voice.tts import speak
 from core.personality import friday_personality
 
@@ -258,10 +258,44 @@ async def ws_voice(websocket: WebSocket) -> None:
     """Voice endpoint kept for raw-audio clients."""
     await websocket.accept()
     logger.info("WebSocket client connected: /ws/voice")
+    buffered_chunks: list[bytes] = []
 
     try:
         while True:
-            audio_bytes = await websocket.receive_bytes()
+            message = await websocket.receive()
+            audio_bytes = message.get("bytes")
+            text_payload = message.get("text")
+
+            if text_payload:
+                try:
+                    control = json.loads(text_payload)
+                except json.JSONDecodeError:
+                    control = {}
+
+                event_type = control.get("type")
+                if event_type == "voice_start":
+                    buffered_chunks.clear()
+                    await _send_progress(websocket, "transcribing", 10, "Voice stream started...")
+                    continue
+                if event_type == "voice_chunk":
+                    chunk_text = control.get("audio")
+                    if isinstance(chunk_text, str):
+                        buffered_chunks.append(chunk_text.encode("latin1", errors="ignore"))
+                        if len(buffered_chunks) % 3 == 0:
+                            partial = await transcribe_stream(buffered_chunks[-3:])
+                            if partial:
+                                await _send_json(
+                                    websocket,
+                                    {"status": "partial_transcript", "text": partial},
+                                )
+                    continue
+                if event_type == "voice_end":
+                    audio_bytes = b"".join(buffered_chunks)
+                    buffered_chunks.clear()
+                elif event_type == "ping":
+                    await _send_json(websocket, {"status": "pong"})
+                    continue
+
             if not audio_bytes:
                 continue
 
@@ -291,6 +325,10 @@ async def ws_voice(websocket: WebSocket) -> None:
 
             response = await assistant_orchestrator.execute(text)
             summary = response.get("summary", "Ready, Boss.")
+            await _send_json(
+                websocket,
+                {"status": "response_ready", "text": summary},
+            )
             await _send_progress(websocket, "speaking", 85, "Talking back...")
             speech_bytes = await speak(summary)
 

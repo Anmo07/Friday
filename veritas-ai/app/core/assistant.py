@@ -12,6 +12,7 @@ from urllib.parse import quote_plus, urlparse
 
 from app.pipeline.deep_pipeline import deep_pipeline
 from app.pipeline.fast_pipeline import fast_pipeline
+from app.core.web_enrichment import fetch_web_context, should_enrich
 from core.personality import friday_personality
 from system.control_engine import control_engine
 
@@ -253,6 +254,7 @@ class AssistantOrchestrator:
                 explanation=explanation,
                 action=result.action,
                 requires_confirmation=result.requires_confirmation,
+                risk_level=result.risk_level,
                 executed=result.success,
             )
 
@@ -279,6 +281,23 @@ class AssistantOrchestrator:
         response["assistant_mode"] = intent.mode
         response["intent"] = intent.kind
         response["timestamp"] = response.get("timestamp") or _now_iso()
+        if intent.kind in {"chat", "verification"} and should_enrich(intent.normalized_query):
+            web_context = await asyncio.to_thread(fetch_web_context, intent.normalized_query)
+            if web_context:
+                response.setdefault("sources", [])
+                response.setdefault("facts", [])
+                response["sources"].extend(
+                    {
+                        "url": item.get("url", ""),
+                        "credibility_score": 0.7,
+                        "type": "web",
+                    }
+                    for item in web_context
+                )
+                response["facts"].extend(item.get("snippet", "") for item in web_context)
+                response["web_enriched"] = True
+            else:
+                response["web_enriched"] = False
         return response
 
     async def _fetch_news_brief(self, query: str) -> dict:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import platform
@@ -13,6 +14,7 @@ from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import quote_plus
 
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +26,7 @@ class ControlResult:
     summary: str
     details: dict[str, Any] = field(default_factory=dict)
     requires_confirmation: bool = False
+    risk_level: str = "low"
 
 
 class SystemControlEngine:
@@ -38,6 +41,12 @@ class SystemControlEngine:
 
         if not normalized:
             return ControlResult(False, "noop", "No command to run, Boss.")
+
+        if lowered.startswith("confirm ") and len(normalized.split(" ", 1)) == 2:
+            confirmed_command = normalized.split(" ", 1)[1].strip()
+            result = await self._execute_unsafe(confirmed_command)
+            self._write_audit_log(confirmed_command, result)
+            return result
 
         if lowered.startswith("shutdown system") or lowered in {"shutdown", "power off"}:
             return await self.shutdown_system()
@@ -55,21 +64,45 @@ class SystemControlEngine:
             return await self.close_app(target)
 
         if lowered.startswith(("run ", "execute ", "terminal ")):
-            return await self.run_terminal_command(self._extract_terminal_command(normalized))
+            terminal_cmd = self._extract_terminal_command(normalized)
+            risk = self._assess_terminal_risk(terminal_cmd)
+            if self._requires_confirmation(risk):
+                result = ControlResult(
+                    success=False,
+                    action="terminal",
+                    summary="High-risk command blocked pending confirmation. Say: confirm <command>",
+                    details={"command": terminal_cmd, "risk": risk},
+                    requires_confirmation=True,
+                    risk_level=risk,
+                )
+                self._write_audit_log(terminal_cmd, result)
+                return result
+            result = await self.run_terminal_command(terminal_cmd, risk_level=risk)
+            self._write_audit_log(terminal_cmd, result)
+            return result
 
         if lowered.startswith(("search file ", "find file ")):
             query = normalized.split(" ", 2)[2].strip()
-            return await self.search_file(query)
+            result = await self.search_file(query)
+            self._write_audit_log(normalized, result)
+            return result
 
         if lowered.startswith(("open browser ", "browse ", "search web for ", "google ")):
-            return await self.browser_search(self._extract_browser_query(normalized))
+            result = await self.browser_search(self._extract_browser_query(normalized))
+            self._write_audit_log(normalized, result)
+            return result
 
-        return ControlResult(
+        result = ControlResult(
             success=False,
             action="unmatched",
             summary="I can handle apps, terminal commands, files, and browser actions, Boss.",
             details={"command": command},
         )
+        self._write_audit_log(normalized, result)
+        return result
+
+    async def _execute_unsafe(self, command: str) -> ControlResult:
+        return await self.run_terminal_command(command, risk_level=self._assess_terminal_risk(command))
 
     async def open_app(self, app_name: str) -> ControlResult:
         if not app_name:
@@ -109,7 +142,7 @@ class SystemControlEngine:
             details={"app": app_name, "stderr": completed.stderr.strip()},
         )
 
-    async def run_terminal_command(self, command: str) -> ControlResult:
+    async def run_terminal_command(self, command: str, *, risk_level: str = "low") -> ControlResult:
         if not command:
             return ControlResult(False, "terminal", "No terminal command to run, Boss.")
 
@@ -120,6 +153,7 @@ class SystemControlEngine:
                 summary="That command needs confirmation, Boss.",
                 details={"command": command},
                 requires_confirmation=True,
+                risk_level="high",
             )
 
         completed = await self._run_subprocess(command, use_shell=True)
@@ -135,6 +169,7 @@ class SystemControlEngine:
                 "output": output[:1600],
                 "returncode": completed.returncode,
             },
+            risk_level=risk_level,
         )
 
     async def search_file(self, pattern: str, root: str | None = None) -> ControlResult:
@@ -233,6 +268,52 @@ class SystemControlEngine:
         lowered = command.lower()
         destructive_terms = ("rm ", "shutdown", "reboot", "halt", "mkfs", "diskutil erase", "format ")
         return any(term in lowered for term in destructive_terms)
+
+    def _assess_terminal_risk(self, command: str) -> str:
+        lowered = command.lower()
+        high_risk_terms = (
+            "rm -rf",
+            "sudo ",
+            "mkfs",
+            "diskutil erase",
+            "dd if=",
+            "chmod -r 777",
+            "reboot",
+            "shutdown",
+        )
+        medium_risk_terms = ("brew install", "npm install -g", "pip install", "docker system prune")
+        if any(term in lowered for term in high_risk_terms):
+            return "high"
+        if any(term in lowered for term in medium_risk_terms):
+            return "medium"
+        return "low"
+
+    def _requires_confirmation(self, risk_level: str) -> bool:
+        policy = settings.CONTROL_CONFIRMATION_POLICY
+        if policy == "confirm_all":
+            return True
+        if policy == "confirm_high_risk":
+            return risk_level == "high"
+        if policy == "full_auto":
+            return not settings.CONTROL_ALLOW_FULL_AUTO and risk_level == "high"
+        return risk_level == "high"
+
+    def _write_audit_log(self, command: str, result: ControlResult) -> None:
+        log_path = settings.CONTROL_AUDIT_LOG_PATH
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+        record = {
+            "command": command,
+            "action": result.action,
+            "success": result.success,
+            "requires_confirmation": result.requires_confirmation,
+            "risk_level": result.risk_level,
+            "details": result.details,
+        }
+        try:
+            with open(log_path, "a", encoding="utf-8") as handle:
+                handle.write(json.dumps(record) + "\n")
+        except Exception as exc:
+            logger.debug("Failed to write control audit log: %s", exc)
 
     def _open_app_args(self, app_name: str) -> list[str]:
         if self.platform == "darwin":

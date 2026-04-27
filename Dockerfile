@@ -1,50 +1,15 @@
-# syntax=docker/dockerfile:1
-FROM python:3.11-slim AS builder
-
-WORKDIR /app
-
-# Install build dependencies only in builder stage
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy requirements only for better layer caching
-COPY pyproject.toml /app/
-
-# Extract and install dependencies from pyproject.toml
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir \
-    'fastapi>=0.111.0' \
-    'uvicorn>=0.30.1' \
-    'pydantic>=2.7.0' \
-    'pydantic-settings>=2.3.0' \
-    'crewai==0.1.32' \
-    'langchain>=0.1.0' \
-    'chromadb>=0.4.0' \
-    'playwright==1.44.0' \
-    'neo4j>=5.19.0' \
-    'redis>=5.0.0'
-
-# ============================================================================
+# Root compatibility Dockerfile.
+# Canonical runtime Dockerfile lives at veritas-ai/Dockerfile.
 FROM python:3.11-slim
 
-WORKDIR /app
+WORKDIR /app/veritas-ai
 
-# Create non-root user for security
-RUN useradd -m -u 1000 appuser
+COPY veritas-ai/requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r /tmp/requirements.txt
 
-# Copy runtime dependencies from builder
-COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
-
-# Copy application code
-COPY --chown=appuser:appuser veritas-ai /app/veritas-ai
-
-USER appuser
-
-# Signal handling for graceful shutdown
-ENV PYTHONUNBUFFERED=1
+COPY veritas-ai /app/veritas-ai
 
 EXPOSE 8000
 
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

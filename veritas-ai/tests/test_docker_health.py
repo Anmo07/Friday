@@ -3,8 +3,8 @@ import requests
 import websockets
 import os
 
-BASE_URL = os.getenv("VERITAS_BASE_URL", "http://localhost:8000")
-WS_URL = os.getenv("VERITAS_WS_URL", "ws://localhost:8000/ws/stream")
+BASE_URL = os.getenv("VERITAS_BASE_URL", "http://localhost:8001")
+WS_URL = os.getenv("VERITAS_WS_URL", "ws://localhost:8001/ws/stream")
 
 def test_fastapi_health():
     """ Tests if the Docker container is serving FastAPI over port 8000. """

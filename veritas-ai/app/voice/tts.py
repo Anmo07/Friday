@@ -1,9 +1,11 @@
-"""Text-to-speech: Edge-TTS async, non-blocking."""
+"""Text-to-speech: local-first TTS with optional Edge-TTS fallback."""
 import asyncio
 import logging
 import tempfile
 import os
 from typing import Optional
+
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -38,24 +40,50 @@ async def speak(text: str, voice: Optional[str] = None) -> bytes:
         return b""
 
     voice = voice or _current_voice
-    tmp_path = None
+    if settings.TTS_PROVIDER == "pyttsx3":
+        audio = await asyncio.to_thread(_speak_with_pyttsx3, text, voice)
+        if audio:
+            return audio
 
+    return await _speak_with_edge_tts(text, voice)
+
+
+def _speak_with_pyttsx3(text: str, voice: str) -> bytes:
+    """Offline/local speech using system voices via pyttsx3."""
+    tmp_path = None
+    try:
+        import pyttsx3
+        engine = pyttsx3.init()
+        engine.setProperty("rate", settings.TTS_SPEECH_RATE)
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+            tmp_path = tmp.name
+        engine.save_to_file(text, tmp_path)
+        engine.runAndWait()
+        with open(tmp_path, "rb") as f:
+            return f.read()
+    except ImportError:
+        logger.warning("pyttsx3 not installed. Falling back to edge-tts.")
+        return b""
+    except Exception as e:  # pragma: no cover - depends on local audio stack
+        logger.warning("Local pyttsx3 TTS failed: %s", e)
+        return b""
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
+async def _speak_with_edge_tts(text: str, voice: str) -> bytes:
+    tmp_path = None
     try:
         import edge_tts
-
         communicate = edge_tts.Communicate(text, voice)
-
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
             tmp_path = tmp.name
-
         await communicate.save(tmp_path)
-
         with open(tmp_path, "rb") as f:
             audio_bytes = f.read()
-
-        logger.debug(f"TTS generated {len(audio_bytes)} bytes for {len(text)} chars")
+        logger.debug("Edge-TTS generated %d bytes", len(audio_bytes))
         return audio_bytes
-
     except ImportError:
         logger.error("edge-tts not installed. Install with: pip install edge-tts")
         return b""
