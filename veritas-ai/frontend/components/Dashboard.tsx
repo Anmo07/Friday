@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -8,12 +8,15 @@ import {
   Brain,
   Command,
   Ear,
+  Layers,
   Mic,
   MicOff,
   Newspaper,
   OctagonX,
   Sparkles,
   Volume2,
+  Zap,
+  Database,
 } from "lucide-react";
 
 import { useWebSocket } from "@/hooks/useWebSocket";
@@ -44,6 +47,8 @@ const STAGE_LABELS: Record<string, string> = {
   data_collection: "Pulling context",
   verification: "Verifying",
   generating: "Framing the answer",
+  parallel_agents: "Running parallel agents",
+  scoring: "Computing truth score",
   complete: "Ready",
 };
 
@@ -53,6 +58,12 @@ const INTENT_STYLES: Record<string, { label: string; icon: React.ElementType; ba
   verification: { label: "Verification", icon: Brain, badge: "bg-fuchsia-500/10 text-fuchsia-200 border-fuchsia-400/30" },
   chat: { label: "Assistant", icon: Bot, badge: "bg-emerald-500/10 text-emerald-200 border-emerald-400/30" },
   interrupt: { label: "Interrupted", icon: OctagonX, badge: "bg-rose-500/10 text-rose-200 border-rose-400/30" },
+};
+
+const DEPTH_LABELS: Record<number, { label: string; color: string }> = {
+  1: { label: "L1 FAST", color: "text-emerald-400" },
+  2: { label: "L2 ENHANCED", color: "text-cyan-400" },
+  3: { label: "L3 DEEP", color: "text-purple-400" },
 };
 
 const normalizeTranscript = (value: string) => value.replace(/\s+/g, " ").trim();
@@ -69,6 +80,9 @@ export default function Dashboard() {
     sessionGreeting,
     mode,
     intent,
+    depthLevel,
+    agentUpdates,
+    voiceCommand,
     sendQuery,
     interrupt,
   } = useWebSocket(WS_BASE_URL);
@@ -95,6 +109,7 @@ export default function Dashboard() {
   const currentIntent = intent || payload?.intent || "chat";
   const intentStyle = INTENT_STYLES[currentIntent] || INTENT_STYLES.chat;
   const IntentIcon = intentStyle.icon;
+  const depthInfo = DEPTH_LABELS[depthLevel] || DEPTH_LABELS[1];
 
   useEffect(() => { busyRef.current = isBusy; }, [isBusy]);
   useEffect(() => { speakingRef.current = isSpeaking; }, [isSpeaking]);
@@ -130,7 +145,7 @@ export default function Dashboard() {
     if (!cleaned || cleaned === lastSentQueryRef.current) return;
     lastSentQueryRef.current = cleaned;
     setLastUserQuery(cleaned);
-    const useDeep = /(show|analyze|compare|news|verify|fact|deep)/i.test(cleaned);
+    const useDeep = /(analyze deeply|compare|news breakdown|in-depth|full analysis|deep dive|investigate)/i.test(cleaned);
     sendQuery(cleaned, { deep: useDeep });
     setLiveTranscript("");
   }, [sendQuery]);
@@ -171,7 +186,6 @@ export default function Dashboard() {
         return;
       }
       if (event.error === "network" || event.error === "no-speech" || event.error === "aborted") {
-        // Silently ignore common ephemeral errors and let onend restart it.
         return;
       }
       setMicError(`Mic issue: ${event.error}`);
@@ -203,10 +217,20 @@ export default function Dashboard() {
                      orbState === "interrupted" ? "border-rose-300 bg-rose-400/10 shadow-[0_0_40px_rgba(251,113,133,0.2)]" :
                      "border-white/10 bg-white/5";
 
+  // Determine if Control Room should be shown
+  const showControlRoom = payload && (
+    mode === "verification" ||
+    currentIntent === "news" ||
+    currentIntent === "verification" ||
+    depthLevel >= 2 ||
+    payload.sources?.length > 0
+  );
+
   return (
     <div className="relative w-full min-h-screen bg-[#020617] text-slate-200 font-sans p-6 overflow-hidden">
       {/* Background Ambience */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,0.1),transparent_50%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,0.08),transparent_50%)]" />
+      <div className="absolute inset-0 cr-grid-bg" />
       
       <div className="relative z-10 max-w-7xl mx-auto flex flex-col gap-8">
         
@@ -214,31 +238,48 @@ export default function Dashboard() {
         <div className="flex flex-col items-center justify-center gap-4 mt-4">
           <button 
             onClick={() => { if (isBusy || isSpeaking) handleInterrupt(); else startListening(); }}
-            className={`relative flex h-32 w-32 items-center justify-center rounded-full border transition-all duration-500 ${orbStyles}`}
+            className={`relative flex h-28 w-28 items-center justify-center rounded-full border transition-all duration-500 ${orbStyles}`}
           >
             <div className="absolute inset-2 rounded-full border border-white/5" />
-            {orbState === "speaking" ? <Volume2 className="h-10 w-10 text-fuchsia-200" /> :
-             orbState === "processing" ? <Brain className="h-10 w-10 text-cyan-200" /> :
-             isListening ? <Mic className="h-10 w-10 text-emerald-200" /> :
-             <MicOff className="h-10 w-10 text-slate-500" />}
+            {orbState === "speaking" ? <Volume2 className="h-9 w-9 text-fuchsia-200" /> :
+             orbState === "processing" ? <Brain className="h-9 w-9 text-cyan-200" /> :
+             isListening ? <Mic className="h-9 w-9 text-emerald-200" /> :
+             <MicOff className="h-9 w-9 text-slate-500" />}
           </button>
           
           <div className="flex flex-col items-center text-center">
-            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] uppercase tracking-widest text-cyan-300 mb-2">
-              <Sparkles className="h-3 w-3" /> {stageLabel}
+            {/* Status row with depth badge */}
+            <div className="flex items-center gap-3 mb-2">
+              <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] uppercase tracking-widest text-cyan-300">
+                <Sparkles className="h-3 w-3" /> {stageLabel}
+              </div>
+              {isBusy && (
+                <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] uppercase tracking-widest font-mono ${depthInfo.color}`}>
+                  <Layers className="h-3 w-3" /> {depthInfo.label}
+                </div>
+              )}
+              {agentUpdates.length > 0 && (
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] uppercase tracking-widest text-purple-400 font-mono">
+                  <Database className="h-3 w-3" /> {agentUpdates.length} agents
+                </div>
+              )}
             </div>
-            <p className="text-lg font-medium text-white max-w-lg h-12 overflow-hidden">{assistantMessage || "I’m listening, Boss."}</p>
+            <p className="text-lg font-medium text-white max-w-lg h-12 overflow-hidden">{assistantMessage || "I'm listening, Boss."}</p>
           </div>
         </div>
 
         {/* DASHBOARD GRID / CONTROL ROOM */}
         <div className="w-full transition-all duration-700">
-          { (mode === "verification" || currentIntent === "news" || currentIntent === "verification") && payload ? (
-            <ControlRoom payload={payload} />
+          {showControlRoom ? (
+            <ControlRoom
+              payload={payload}
+              agentUpdates={agentUpdates}
+              depthLevel={depthLevel}
+            />
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 opacity-80">
               {/* Simple View for Chat/General Mode */}
-              <div className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl h-64 flex flex-col justify-between">
+              <div className="cr-idle-card rounded-3xl border border-white/10 bg-white/[0.03] p-6 backdrop-blur-xl h-64 flex flex-col justify-between">
                 <div>
                   <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-emerald-400 mb-4">
                     <Ear className="h-4 w-4" /> Live Ear
@@ -248,24 +289,32 @@ export default function Dashboard() {
                 {lastUserQuery && <div className="text-xs text-slate-500">Last: {lastUserQuery}</div>}
               </div>
               
-              <div className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl h-64 flex flex-col justify-between">
+              <div className="cr-idle-card rounded-3xl border border-white/10 bg-white/[0.03] p-6 backdrop-blur-xl h-64 flex flex-col justify-between">
                 <div>
                   <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-cyan-400 mb-4">
-                    <Bot className="h-4 w-4" /> Status
+                    <Bot className="h-4 w-4" /> System Status
                   </div>
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm"><span>Neural Engine</span><span className="text-cyan-400">ONLINE</span></div>
-                    <div className="flex justify-between text-sm"><span>Voice Synthesis</span><span className="text-fuchsia-400">READY</span></div>
-                    <div className="flex justify-between text-sm"><span>Verification Layer</span><span className="text-amber-400">IDLE</span></div>
+                  <div className="space-y-2.5">
+                    <div className="flex justify-between text-sm"><span className="text-slate-400">Neural Engine</span><span className="text-cyan-400 font-mono text-xs">ONLINE</span></div>
+                    <div className="flex justify-between text-sm"><span className="text-slate-400">Voice Synthesis</span><span className="text-fuchsia-400 font-mono text-xs">READY</span></div>
+                    <div className="flex justify-between text-sm"><span className="text-slate-400">Adaptive Router</span><span className="text-emerald-400 font-mono text-xs">L{depthLevel} MODE</span></div>
+                    <div className="flex justify-between text-sm"><span className="text-slate-400">Smart Cache</span><span className="text-purple-400 font-mono text-xs">ACTIVE</span></div>
                   </div>
                 </div>
                 <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-                   <div className="h-full bg-cyan-500 transition-all duration-500" style={{ width: `${progress}%` }} />
+                   <div className="h-full bg-gradient-to-r from-cyan-500 to-purple-500 transition-all duration-500 rounded-full" style={{ width: `${progress}%` }} />
                 </div>
               </div>
             </div>
           )}
         </div>
+
+        {/* VOICE COMMAND INDICATOR */}
+        {voiceCommand && (
+          <div className="flex items-center gap-3 rounded-2xl border border-cyan-500/30 bg-cyan-500/10 p-4 text-sm text-cyan-200 cr-agent-item">
+            <Command className="h-5 w-5 text-cyan-400" /> Voice command: <span className="font-mono font-bold">{voiceCommand}</span>
+          </div>
+        )}
 
         {/* ERROR HANDLING */}
         {(error || micError) && (

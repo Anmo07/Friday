@@ -3,6 +3,6 @@
   "/developers/page": "app/developers/page.js",
   "/dashboard/page": "app/dashboard/page.js",
   "/feedback/page": "app/feedback/page.js",
-  "/timeline/page": "app/timeline/page.js",
-  "/page": "app/page.js"
+  "/page": "app/page.js",
+  "/timeline/page": "app/timeline/page.js"
 }
