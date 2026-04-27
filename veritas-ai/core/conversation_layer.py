@@ -2,7 +2,7 @@ import asyncio
 import logging
 from typing import AsyncGenerator
 
-from core.assistant import assistant_orchestrator
+from app.core.assistant import assistant_orchestrator
 from core.personality import friday_personality
 from models.multi_llm import get_fast_llm
 
