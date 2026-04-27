@@ -1,14 +1,14 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Shield, BarChart3, Clock, MessageSquare, Code2 } from "lucide-react";
+import { Shield, BarChart3, Clock, Settings, Cpu } from "lucide-react";
 
 const navItems = [
   { href: "/", label: "Home", icon: Shield },
   { href: "/dashboard", label: "Assistant", icon: BarChart3 },
+  { href: "/control", label: "Control Room", icon: Cpu },
   { href: "/timeline", label: "Timeline", icon: Clock },
-  { href: "/feedback", label: "Feedback", icon: MessageSquare },
-  { href: "/developers", label: "API", icon: Code2 },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 export default function Navbar() {

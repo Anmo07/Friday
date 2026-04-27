@@ -26,6 +26,9 @@ dependencies = [
     "slowapi>=0.1.9",
 ]
 
+[project.scripts]
+friday = "friday.cli:main"
+
 [tool.setuptools]
 package-dir = {"" = "veritas-ai"}
 

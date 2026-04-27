@@ -1,0 +1,1 @@
+"""FRIDAY CLI Package."""

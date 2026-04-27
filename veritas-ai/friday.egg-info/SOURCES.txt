@@ -42,6 +42,7 @@ veritas-ai/core/adaptive_router.py
 veritas-ai/core/alert_engine.py
 veritas-ai/core/cache_layer.py
 veritas-ai/core/consensus_engine.py
+veritas-ai/core/conversation_layer.py
 veritas-ai/core/explainability_layer.py
 veritas-ai/core/firewall.py
 veritas-ai/core/formatter.py
@@ -57,9 +58,12 @@ veritas-ai/core/truth_engine.py
 veritas-ai/core/validation_engine.py
 veritas-ai/feedback/feedback_service.py
 veritas-ai/feedback/network_effect_builder.py
+veritas-ai/friday/__init__.py
+veritas-ai/friday/cli.py
 veritas-ai/friday.egg-info/PKG-INFO
 veritas-ai/friday.egg-info/SOURCES.txt
 veritas-ai/friday.egg-info/dependency_links.txt
+veritas-ai/friday.egg-info/entry_points.txt
 veritas-ai/friday.egg-info/requires.txt
 veritas-ai/friday.egg-info/top_level.txt
 veritas-ai/memory/__init__.py
