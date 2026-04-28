@@ -48,6 +48,10 @@ class FridayMenuApp(rumps.App):
         t.daemon = True
         t.start()
         
+    def _run_async_loop(self):
+        asyncio.set_event_loop(self.loop)
+        self.loop.run_forever()
+
     def start_background_loop(self):
         try:
             print("Initializing FRIDAY...")
@@ -55,6 +59,11 @@ class FridayMenuApp(rumps.App):
             self.loop.run_until_complete(self.layer.initialize())
             print("\nHello Boss. FRIDAY online. I'm listening...")
             print("(You can speak or type your commands here)\n")
+            
+            # Start event loop in background thread
+            loop_thread = threading.Thread(target=self._run_async_loop)
+            loop_thread.daemon = True
+            loop_thread.start()
             
             # Start terminal input thread
             terminal_thread = threading.Thread(target=self.terminal_loop)
@@ -117,14 +126,15 @@ class FridayMenuApp(rumps.App):
     def listen_loop(self):
         import time
         recognizer = sr.Recognizer()
-        recognizer.energy_threshold = 300  # Set a low base threshold for sensitivity
+        recognizer.energy_threshold = 300  # Base threshold
         recognizer.dynamic_energy_threshold = True
-        recognizer.pause_threshold = 0.4  # Cut silence waiting time in half for faster response
-        recognizer.non_speaking_duration = 0.4
+        recognizer.pause_threshold = 0.8  # Increased to prevent cutting off sentences mid-speech
+        recognizer.non_speaking_duration = 0.5
         
         try:
             with sr.Microphone() as source:
-                recognizer.adjust_for_ambient_noise(source, duration=1)
+                # Use slightly longer duration to accurately calibrate ambient noise
+                recognizer.adjust_for_ambient_noise(source, duration=1.5)
                 while True:
                     if not self.listening:
                         time.sleep(0.5)

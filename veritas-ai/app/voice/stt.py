@@ -8,33 +8,36 @@ from typing import Optional
 from app.core.config import settings
 logger = logging.getLogger(__name__)
 
+import threading
+
 # Lazy-loaded model singleton
 _model = None
-_model_lock = asyncio.Lock()
+_model_lock = threading.Lock()
 
 
 def _get_or_load_model():
     """Lazy-load Faster-Whisper model on first use."""
     global _model
-    if _model is None:
-        try:
-            from faster_whisper import WhisperModel
-            logger.info(
-                "Loading Faster-Whisper model (%s/%s/%s)...",
-                settings.STT_MODEL_SIZE,
-                settings.STT_DEVICE,
-                settings.STT_COMPUTE_TYPE,
-            )
-            _model = WhisperModel(
-                settings.STT_MODEL_SIZE,
-                compute_type=settings.STT_COMPUTE_TYPE,
-                device=settings.STT_DEVICE,
-            )
-            logger.info("Faster-Whisper model loaded")
-        except ImportError:
-            logger.error("faster-whisper not installed. Install with: pip install faster-whisper")
-            raise
-    return _model
+    with _model_lock:
+        if _model is None:
+            try:
+                from faster_whisper import WhisperModel
+                logger.info(
+                    "Loading Faster-Whisper model (%s/%s/%s)...",
+                    settings.STT_MODEL_SIZE,
+                    settings.STT_DEVICE,
+                    settings.STT_COMPUTE_TYPE,
+                )
+                _model = WhisperModel(
+                    settings.STT_MODEL_SIZE,
+                    compute_type=settings.STT_COMPUTE_TYPE,
+                    device=settings.STT_DEVICE,
+                )
+                logger.info("Faster-Whisper model loaded")
+            except ImportError:
+                logger.error("faster-whisper not installed. Install with: pip install faster-whisper")
+                raise
+        return _model
 
 
 def _transcribe_sync(audio_bytes: bytes) -> str:
