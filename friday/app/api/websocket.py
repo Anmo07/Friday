@@ -10,8 +10,6 @@ from contextlib import suppress
 from typing import Awaitable, Callable
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-
-from app.core.assistant import AssistantIntent, assistant_orchestrator
 from app.core.cache import cache
 from app.voice.stt_service import stt_service
 from app.voice.tts_service import tts_service
@@ -92,17 +90,15 @@ async def _handle_query(
     query: str,
     *,
     deep: bool,
-    intent: AssistantIntent,
+    tier: str,
 ) -> None:
     start = time.monotonic()
 
-    if _cacheable(intent):
+    if tier != "tier_1_fast":
         await _send_progress(websocket, "cache_check", 5, "Checking memory...")
         cached = await cache.get(query)
         if cached is not None:
             cached["_cached"] = True
-            cached["assistant_mode"] = cached.get("assistant_mode", intent.mode)
-            cached["intent"] = cached.get("intent", intent.kind)
             await _send_json(
                 websocket,
                 {
@@ -114,25 +110,12 @@ async def _handle_query(
             )
             return
 
-    progress_callback = await _create_progress_callback(websocket)
-    response = await assistant_orchestrator.execute(
-        query,
-        deep_requested=deep,
-        progress_callback=progress_callback,
-    )
+    pipeline = websocket.app.state.pipeline
+    response = await pipeline.run(query)
     response["latency_ms"] = round((time.monotonic() - start) * 1000, 1)
 
-    if _cacheable(intent):
+    if tier != "tier_1_fast":
         await cache.set(query, response)
-
-    try:
-        from core.history_store import log_query_result
-        from models.schemas import QueryResponse
-
-        payload = QueryResponse(**response)
-        asyncio.create_task(asyncio.to_thread(log_query_result, payload, "public"))
-    except Exception:
-        logger.debug("History logging skipped for response")
 
     await _send_json(
         websocket,
@@ -140,7 +123,7 @@ async def _handle_query(
             "status": "complete",
             "data": response,
             "progress": 100,
-            "message": response.get("summary", "Ready, Boss."),
+            "message": response.get("response", "Ready, Boss.")[:100] + "...",
         },
     )
 
@@ -205,7 +188,8 @@ async def ws_stream(websocket: WebSocket) -> None:
                 )
                 continue
 
-            intent = assistant_orchestrator.classify(normalized_query, deep_requested=deep)
+            pipeline = websocket.app.state.pipeline
+            tier = pipeline.classify(normalized_query)
 
             if current_task and not current_task.done():
                 current_task.cancel()
@@ -223,9 +207,9 @@ async def ws_stream(websocket: WebSocket) -> None:
                 websocket,
                 {
                     "status": "assistant",
-                    "message": intent.opening_line,
-                    "mode": intent.mode,
-                    "intent": intent.kind,
+                    "message": "Processing your request, Boss...",
+                    "mode": "assistant",
+                    "intent": tier,
                 },
             )
 
@@ -234,7 +218,7 @@ async def ws_stream(websocket: WebSocket) -> None:
                     websocket,
                     normalized_query,
                     deep=deep,
-                    intent=intent,
+                    tier=tier,
                 )
             )
             
@@ -311,14 +295,14 @@ async def ws_voice(websocket: WebSocket) -> None:
                 )
                 continue
 
-            intent = assistant_orchestrator.classify(text)
+            tier = pipeline.classify(text)
             await _send_json(
                 websocket,
                 {
                     "status": "assistant",
-                    "message": intent.opening_line,
-                    "mode": intent.mode,
-                    "intent": intent.kind,
+                    "message": "Acknowledged.",
+                    "mode": "voice",
+                    "intent": tier,
                     "transcription": text,
                 },
             )
