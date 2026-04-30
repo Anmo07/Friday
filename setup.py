@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="friday",
-    version="0.1.0",
+    version="0.1.1",
     package_dir={"": "friday"},
     packages=find_packages(where="friday"),
 )
