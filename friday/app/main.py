@@ -117,12 +117,12 @@ async def lifespan(app: FastAPI):
     elapsed = time.monotonic() - start_time
     logger.info(f"Core services ready in {elapsed:.2f}s")
 
-    # Phase 2: Initialize the Antigravity Pipeline ONCE (singleton)
+    # Phase 2: Initialize the Friday Pipeline ONCE (singleton)
     # This loads the sentence-transformer model (~5s on first run, cached after).
     try:
-        from core.pipeline import AntigravityPipeline
-        app.state.pipeline = AntigravityPipeline()
-        logger.info(f"AntigravityPipeline loaded — router ready at ~4ms/query")
+        from core.pipeline import FridayPipeline
+        app.state.pipeline = FridayPipeline()
+        logger.info(f"FridayPipeline loaded — router ready at ~4ms/query")
     except Exception as e:
         logger.error(f"Pipeline init failed: {e}", exc_info=True)
         app.state.pipeline = None

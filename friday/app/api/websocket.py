@@ -13,8 +13,8 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.core.assistant import AssistantIntent, assistant_orchestrator
 from app.core.cache import cache
-from app.voice.stt import transcribe, transcribe_stream
-from app.voice.tts import speak
+from app.voice.stt_service import stt_service
+from app.voice.tts_service import tts_service
 from core.personality import friday_personality
 
 logger = logging.getLogger(__name__)
@@ -300,7 +300,7 @@ async def ws_voice(websocket: WebSocket) -> None:
                 continue
 
             await _send_progress(websocket, "transcribing", 20, "Listening...")
-            text = await transcribe(audio_bytes)
+            text = await stt_service.transcribe(audio_bytes)
             if not text:
                 await _send_json(
                     websocket,
@@ -323,14 +323,20 @@ async def ws_voice(websocket: WebSocket) -> None:
                 },
             )
 
-            response = await assistant_orchestrator.execute(text)
-            summary = response.get("summary", "Ready, Boss.")
+            # Execute via pipeline in voice mode
+            pipeline = websocket.app.state.pipeline
+            response = await pipeline.run(text, voice_mode=True)
+            summary = response.get("response", "Ready, Boss.")
+            
             await _send_json(
                 websocket,
                 {"status": "response_ready", "text": summary},
             )
             await _send_progress(websocket, "speaking", 85, "Talking back...")
-            speech_bytes = await speak(summary)
+            
+            # Stream audio back to client
+            async for chunk in tts_service.stream_audio(summary):
+                await websocket.send_bytes(chunk)
 
             await _send_json(
                 websocket,
@@ -340,11 +346,8 @@ async def ws_voice(websocket: WebSocket) -> None:
                     "progress": 100,
                     "message": summary,
                     "transcription": text,
-                    "has_audio": bool(speech_bytes),
                 },
             )
-            if speech_bytes:
-                await websocket.send_bytes(speech_bytes)
 
     except WebSocketDisconnect:
         logger.info("WebSocket client disconnected: /ws/voice")

@@ -24,7 +24,7 @@ router = APIRouter(prefix="/api/v1")
 # ---- Pipeline accessor ----
 
 def _get_pipeline(request: Request):
-    """Retrieve the singleton AntigravityPipeline from app.state."""
+    """Retrieve the singleton FridayPipeline from app.state."""
     pipeline = getattr(request.app.state, "pipeline", None)
     if pipeline is None:
         raise HTTPException(
@@ -169,13 +169,33 @@ async def stream_query(request: Request):
     pipeline = _get_pipeline(request)
 
     return StreamingResponse(
-        pipeline.stream_run(query),
+        pipeline.stream_run(query, voice_mode=bool(body.get("voice_mode", False))),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",  # Disable nginx buffering
         },
+    )
+
+
+@router.post("/voice/stream")
+async def voice_stream_endpoint(request: Request):
+    """
+    Returns an audio/wav stream compatible with the existing Next.js frontend.
+    TTFA < 200ms.
+    """
+    body = await request.json()
+    text = body.get("text", "").strip()
+    
+    if not text:
+        raise HTTPException(status_code=400, detail="Text is required for TTS")
+
+    from app.voice.tts_service import tts_service
+    
+    return StreamingResponse(
+        tts_service.stream_audio(text),
+        media_type="audio/wav"
     )
 
 
