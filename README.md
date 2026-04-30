@@ -16,6 +16,36 @@ Friday is a production-grade, **asynchronous event-driven intelligence platform*
 
 **Tagline:** *Verify Truth. Expose Lies.*
 
+---
+
+## ℹ️ About
+
+Friday is an open-source AI-powered truth verification system built to combat the growing epidemic of misinformation in the digital age. Named after the intelligent assistant from Iron Man, Friday embodies the same commitment to truth, accuracy, and reliability.
+
+### Mission
+
+Our mission is to democratize access to truth verification by providing:
+- **Real-time fact-checking** with sub-2-second response times
+- **Transparent reasoning** with source citations and confidence scores
+- **Privacy-first design** with local LLM support and optional cloud models
+- **Extensible architecture** for researchers and developers to build upon
+
+### What Makes Friday Different
+
+Unlike traditional fact-checking services that rely on manual verification or simple keyword matching, Friday uses a sophisticated multi-agent system that:
+1. **Retrieves** information from multiple trusted sources simultaneously
+2. **Validates** claims against cross-referenced evidence
+3. **Analyzes** for contradictions and logical fallacies
+4. **Scores** truthfulness using a weighted mathematical model
+5. **Explains** findings with human-readable summaries
+
+### Use Cases
+
+- **Journalists:** Quickly verify claims before publishing
+- **Researchers:** Track misinformation patterns and trends
+- **Developers:** Integrate truth verification into applications via API
+- **General Public:** Fact-check news articles, social media posts, and more
+
 ### 🛠️ Key Capabilities
 
 | Capability | Technology | Description |
