@@ -30,11 +30,11 @@ dependencies = [
 friday = "friday.cli:main"
 
 [tool.setuptools]
-package-dir = {"" = "veritas-ai"}
+package-dir = {"" = "friday"}
 
 [tool.setuptools.packages.find]
-where = ["veritas-ai"]
+where = ["friday"]
 include = ["*"]
 
 [tool.pyrefly]
-search_path = ["veritas-ai"]
+search_path = ["friday"]

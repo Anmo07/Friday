@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Friday Menu</title>
+  <style>
+    body {
+      width: 300px;
+      margin: 0;
+      padding: 15px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto;
+      background: #0f172a;
+      color: #f8fafc;
+    }
+    h2 { margin: 0 0 10px; font-size: 16px; color: #3b82f6; }
+    p { font-size: 12px; color: #94a3b8; line-height: 1.5; margin-bottom: 15px; }
+    .status {
+      padding: 10px;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      border-radius: 8px;
+      font-size: 11px;
+      color: #10b981;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .status.offline {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      color: #ef4444;
+    }
+    .orb { width: 8px; height: 8px; border-radius: 50%; background: #10b981; }
+    .offline .orb { background: #ef4444; }
+  </style>
+</head>
+<body>
+  <h2>Friday</h2>
+  <p>Highlight any text on the web, right-click, and select "Verify Truth" to instantly analyze claims natively.</p>
+  <label for="api-base-url" style="display:block; font-size:11px; color:#94a3b8; margin-bottom:6px;">Backend API base URL</label>
+  <input id="api-base-url" type="text" style="width:100%; box-sizing:border-box; padding:10px; border-radius:8px; border:1px solid rgba(148,163,184,0.2); background:#020617; color:#f8fafc; margin-bottom:10px;" />
+  <button id="save-config" style="width:100%; padding:10px; border:none; border-radius:8px; background:#2563eb; color:white; font-weight:600; cursor:pointer; margin-bottom:12px;">
+    Save Configuration
+  </button>
+  <div id="connection-status" class="status">
+    <div class="orb"></div>
+    <span id="status-text">Backend Connected</span>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
