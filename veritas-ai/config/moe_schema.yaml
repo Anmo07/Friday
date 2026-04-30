@@ -1,5 +1,5 @@
 moe_router:
-  embedding_model: "nomic-embed-text"
+  embedding_model: "sentence-transformers/all-MiniLM-L6-v2"
   threshold_confidence: 0.75
   
 tiers:
@@ -14,7 +14,7 @@ tiers:
       
   tier_2_standard:
     description: "Vector-only RAG for factual lookup."
-    model: "llama3:8b"
+    model: "llama3.1:8b-instruct"
     ollama_config:
       num_ctx: 4096
       num_thread: 8
@@ -23,9 +23,12 @@ tiers:
       
   tier_3_deep:
     description: "Full Hybrid RAG (Graph + Vector) + Multi-agent verification."
-    model: "mixtral:8x7b" # Or equivalent heavy reasoning model
+    # Llama 3.1 8B-Instruct replaces Mixtral 8x7B.
+    # Rationale: 128K context window, fits in 8-16GB Unified Memory at Q4,
+    # avoids the catastrophic disk swapping Mixtral causes on M2 Air.
+    model: "llama3.1:8b-instruct"
     ollama_config:
       num_ctx: 8192
       num_thread: 8
       f16_kv: true
-      keep_alive: "0"   # Unload immediately after Deep ops to free Unified Memory
+      keep_alive: "5m"  # Keep warm — same model as T2, shared KV cache

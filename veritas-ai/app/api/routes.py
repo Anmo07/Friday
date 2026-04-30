@@ -8,7 +8,6 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from app.core.config import settings
-from app.core.assistant import assistant_orchestrator
 from app.core.cache import cache
 
 logger = logging.getLogger(__name__)
@@ -43,30 +42,38 @@ def _get_owner_email(api_key: str, request: Request) -> str:
 
 async def _resolve_query(query: str, deep: bool = False, owner_email: str = "public") -> dict:
     """Run query through pipeline with caching."""
-    intent = assistant_orchestrator.classify(query, deep_requested=deep)
-
     # Check cache first
-    if intent.kind in {"chat", "verification"}:
-        cached = await cache.get(query)
-        if cached is not None:
-            cached["_cached"] = True
-            return cached
+    cached = await cache.get(query)
+    if cached is not None:
+        cached["_cached"] = True
+        return cached
 
     start = time.monotonic()
-    response = await assistant_orchestrator.execute(query, deep_requested=deep)
+    
+    from core.pipeline import AntigravityPipeline
+    pipeline = AntigravityPipeline()
+    
+    try:
+        response = await pipeline.run(query)
+    except Exception as e:
+        logger.error(f"Pipeline error: {e}", exc_info=True)
+        response = {"response": str(e), "error": True}
 
     response["latency_ms"] = round((time.monotonic() - start) * 1000, 1)
 
     # Cache result
-    if intent.kind in {"chat", "verification"}:
-        await cache.set(query, response)
+    await cache.set(query, response)
 
     # Log to history (non-blocking)
     try:
         from core.history_store import log_query_result
         from models.schemas import QueryResponse
 
-        payload = QueryResponse(**response)
+        payload = QueryResponse(
+            response=response.get("response", ""),
+            truth_score=response.get("truth_score"),
+            sources=response.get("context_used", [])
+        )
         asyncio.create_task(asyncio.to_thread(log_query_result, payload, owner_email))
     except Exception:
         pass
