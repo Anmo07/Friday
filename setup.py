@@ -1,8 +1,8 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="veritas_ai",
+    name="friday",
     version="0.1.0",
-    package_dir={"": "veritas-ai"},
-    packages=find_packages(where="veritas-ai"),
+    package_dir={"": "friday"},
+    packages=find_packages(where="friday"),
 )

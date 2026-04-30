@@ -17,10 +17,23 @@ dist/
 /frontend/node_modules/
 /frontend/.next/
 /frontend/dist/
+friday/frontend/node_modules/
+friday/frontend/.next/
+friday/frontend/dist/
 
 # Local IDE/Editor cache files
 .idea/
 .vscode/
+
+# AI assistant tool directories
+.agents/
+.claude/
+.commandcode/
+.continue/
+.cursor/
+.qoder/
+.qwen/
+.vibe/
 
 # Docker and containerization
 .dockerignore
@@ -30,7 +43,16 @@ dist/
 # Database/Cache files
 *.db
 *.sqlite
+.veritas_llm_cache.db
 
 # Testing caches
 .pytest_cache/
 .ipynb_checkpoints/
+
+# Python build artifacts
+*.egg-info/
+*.egg
+__pycache__/
+*.pyc
+*.pyo
+*.pyd

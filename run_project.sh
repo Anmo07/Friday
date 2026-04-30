@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-STACK_DIR="$SCRIPT_DIR/veritas-ai"
+STACK_DIR="$SCRIPT_DIR/friday"
 LOCAL_PID_FILE="$SCRIPT_DIR/.friday-local.pid"
 
 MODE="${MODE:-docker}"
