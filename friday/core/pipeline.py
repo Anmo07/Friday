@@ -26,18 +26,20 @@ from core.firewall import HallucinationFirewall
 logger = logging.getLogger(__name__)
 
 
-class AntigravityPipeline:
+class FridayPipeline:
     """Singleton MoE pipeline — init once at startup, route at 4ms/query."""
 
     def __init__(self):
         t0 = time.monotonic()
+        from core.mcp_manager import mcp_manager
         self.encoder = HuggingFaceEncoder(name="sentence-transformers/all-MiniLM-L6-v2")
         self.router = self._build_semantic_router()
         self.vector_db = ChromaClient()
         self.graph_db = Neo4jClient()
         self.truth_engine = TruthEngine()
         self.firewall = HallucinationFirewall()
-        logger.info(f"AntigravityPipeline initialized in {time.monotonic() - t0:.2f}s")
+        self.mcp = mcp_manager
+        logger.info(f"FridayPipeline initialized in {time.monotonic() - t0:.2f}s")
 
     # ------------------------------------------------------------------ #
     #  Semantic Router (MoE Gate)                                         #
@@ -146,21 +148,24 @@ class AntigravityPipeline:
     #  Tier Execution — Non-streaming (JSON response)                     #
     # ------------------------------------------------------------------ #
 
-    async def run(self, query: str) -> Dict[str, Any]:
+    async def run(self, query: str, voice_mode: bool = False) -> Dict[str, Any]:
         """Entry point — MoE Gate → Tier execution. Returns complete JSON."""
         tier = self.classify(query)
 
         if tier == "tier_1_fast":
-            return {"response": await self._run_fast_agent(query), "tier": tier}
+            # Check for tool-calling needs
+            if any(kw in query.lower() for kw in self._FAST_KEYWORDS):
+                return {"response": await self._run_mcp_agent(query), "tier": tier}
+            return {"response": await self._run_fast_agent(query, voice_mode=voice_mode), "tier": tier}
 
         elif tier == "tier_2_standard":
             vector_res = await self.retrieve_vector(query)
-            return {"response": await self._run_standard_agent(query, vector_res), "tier": tier}
+            return {"response": await self._run_standard_agent(query, vector_res, voice_mode=voice_mode), "tier": tier}
 
         else:  # tier_3_deep
-            return await self._execute_tier_3(query)
+            return await self._execute_tier_3(query, voice_mode=voice_mode)
 
-    async def _execute_tier_3(self, query: str) -> Dict[str, Any]:
+    async def _execute_tier_3(self, query: str, voice_mode: bool = False) -> Dict[str, Any]:
         """Deep: Parallel Hybrid RAG → Reasoning → Truth Engine → Firewall."""
         # 1. Parallel retrieval
         vector_res, graph_res = await self.retrieve_parallel(query)
@@ -171,7 +176,7 @@ class AntigravityPipeline:
         )
 
         # 3. Reasoning agent
-        reasoning_output = await self._run_reasoning_agent(query, fused_context)
+        reasoning_output = await self._run_reasoning_agent(query, fused_context, voice_mode=voice_mode)
 
         # 4. Truth score
         truth_data = {
@@ -202,7 +207,7 @@ class AntigravityPipeline:
     #  Tier Execution — Streaming (SSE token yield)                       #
     # ------------------------------------------------------------------ #
 
-    async def stream_run(self, query: str) -> AsyncGenerator[str, None]:
+    async def stream_run(self, query: str, voice_mode: bool = False) -> AsyncGenerator[str, None]:
         """
         Streaming entry point — yields Server-Sent Events.
 
@@ -213,15 +218,20 @@ class AntigravityPipeline:
 
         from models.ollama_runtime import resolve_model_name
 
+        # System instructions for voice mode
+        voice_instructions = ""
+        if voice_mode:
+            voice_instructions = "PRIORITY: Be extremely brief. Use conversational prosody. No markdown lists. "
+
         # Build prompt + context based on tier
         if tier == "tier_1_fast":
-            prompt = f"You are a fast local OS agent. Respond in one sentence.\nQuery: {query}"
-            model = resolve_model_name(["phi3:mini", "phi3", "mistral", "llama3"]) or "phi3:mini"
+            prompt = f"{voice_instructions}You are Friday, a fast local OS agent. Respond in one short sentence.\nQuery: {query}"
+            model = resolve_model_name(["llama3.1:8b", "phi3", "mistral", "llama3"]) or "llama3.1:8b"
             context = None
         elif tier == "tier_2_standard":
             vector_res = await self.retrieve_vector(query)
             context = vector_res
-            prompt = f"Answer concisely based on context.\nContext: {context}\nQuery: {query}"
+            prompt = f"{voice_instructions}Answer concisely based on context.\nContext: {context}\nQuery: {query}"
             model = resolve_model_name(["llama3.1:8b-instruct", "llama3.1", "llama3", "mistral"]) or "llama3.1:8b-instruct"
         else:  # tier_3_deep
             vector_res, graph_res = await self.retrieve_parallel(query)
@@ -229,7 +239,7 @@ class AntigravityPipeline:
                 vector_res.get("hits", []), graph_res.get("hits", []),
             )
             context = fused_context
-            prompt = f"Perform deep reasoning and analysis.\nContext: {context}\nQuery: {query}"
+            prompt = f"{voice_instructions}Perform deep reasoning and analysis.\nContext: {context}\nQuery: {query}"
             model = resolve_model_name(["llama3.1:8b-instruct", "llama3.1", "llama3", "mistral"]) or "llama3.1:8b-instruct"
 
         # Emit tier metadata header
@@ -318,23 +328,42 @@ class AntigravityPipeline:
         model = resolve_model_name([preferred_model]) or preferred_model
         return create_ollama_llm(model=model, temperature=temperature)
 
-    async def _run_fast_agent(self, query: str) -> str:
+    async def _run_mcp_agent(self, query: str) -> str:
+        """Agent that can call MCP tools using Llama 3.1 8B."""
+        llm = self._get_llm("llama3.1:8b", temperature=0.0)
+        tools = self.mcp.get_tool_schemas()
+        
+        # Simple tool-calling simulation for current Ollama wrapper
+        # In a full implementation, we'd use the .bind_tools() method
+        response = await llm.ainvoke(
+            f"SYSTEM: You are Friday. Use tools to satisfy the request.\nTOOLS: {json.dumps(tools)}\nQuery: {query}"
+        )
+        
+        # Check if the LLM output looks like a tool call
+        if "{" in response and "name" in response:
+            try:
+                # Naive extraction
+                call_data = json.loads(response[response.find("{"):response.rfind("}")+1])
+                tool_output = await self.mcp.execute_tool(call_data["name"], call_data.get("arguments", {}))
+                return await llm.ainvoke(f"Tool Result: {tool_output}\nQuery: {query}")
+            except Exception:
+                return response
+        return response
+
+    async def _run_fast_agent(self, query: str, voice_mode: bool = False) -> str:
+        instruction = "Respond in one short sentence." if voice_mode else "Respond in one sentence."
         llm = self._get_llm("phi3:mini", temperature=0.0)
-        return await llm.ainvoke(
-            f"You are a fast local OS agent. Respond in one sentence.\nQuery: {query}"
-        )
+        return await llm.ainvoke(f"You are Friday. {instruction}\nQuery: {query}")
 
-    async def _run_standard_agent(self, query: str, context: Any) -> str:
+    async def _run_standard_agent(self, query: str, context: Any, voice_mode: bool = False) -> str:
+        instruction = "Be conversational and brief." if voice_mode else "Answer concisely."
         llm = self._get_llm("llama3.1:8b-instruct", temperature=0.0)
-        return await llm.ainvoke(
-            f"Answer concisely based on context.\nContext: {context}\nQuery: {query}"
-        )
+        return await llm.ainvoke(f"{instruction} based on context.\nContext: {context}\nQuery: {query}")
 
-    async def _run_reasoning_agent(self, query: str, context: Any) -> str:
+    async def _run_reasoning_agent(self, query: str, context: Any, voice_mode: bool = False) -> str:
+        instruction = "Be conversational and brief." if voice_mode else "Perform deep reasoning."
         llm = self._get_llm("llama3.1:8b-instruct", temperature=0.2)
-        return await llm.ainvoke(
-            f"Perform deep reasoning and analysis.\nContext: {context}\nQuery: {query}"
-        )
+        return await llm.ainvoke(f"{instruction}\nContext: {context}\nQuery: {query}")
 
     async def _run_verification_agent(self, draft: str, context: Any) -> str:
         llm = self._get_llm("llama3.1:8b-instruct", temperature=0.0)

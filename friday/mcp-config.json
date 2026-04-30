@@ -1,0 +1,25 @@
+{
+    "allowed_commands": [
+        "ls",
+        "pwd",
+        "date",
+        "uptime",
+        "df",
+        "top",
+        "ps",
+        "whoami",
+        "git",
+        "cat",
+        "grep",
+        "find"
+    ],
+    "restricted_paths": [
+        "/etc",
+        "/var",
+        "/root",
+        "/Users/anmol/.ssh",
+        "/System"
+    ],
+    "max_output_length": 5000,
+    "execution_timeout": 30
+}
