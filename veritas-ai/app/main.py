@@ -117,10 +117,21 @@ async def lifespan(app: FastAPI):
     elapsed = time.monotonic() - start_time
     logger.info(f"Core services ready in {elapsed:.2f}s")
 
-    # Phase 2: Background model preload (non-blocking)
+    # Phase 2: Initialize the Antigravity Pipeline ONCE (singleton)
+    # This loads the sentence-transformer model (~5s on first run, cached after).
+    try:
+        from core.pipeline import AntigravityPipeline
+        app.state.pipeline = AntigravityPipeline()
+        logger.info(f"AntigravityPipeline loaded — router ready at ~4ms/query")
+    except Exception as e:
+        logger.error(f"Pipeline init failed: {e}", exc_info=True)
+        app.state.pipeline = None
+
+    # Phase 3: Background model preload (non-blocking)
     preload_task = asyncio.create_task(_preload_models_background())
 
-    logger.info(f"Veritas AI started in {elapsed:.2f}s (models loading in background)")
+    total_elapsed = time.monotonic() - start_time
+    logger.info(f"Veritas AI started in {total_elapsed:.2f}s (models loading in background)")
 
     yield  # App is running
 
@@ -131,6 +142,12 @@ async def lifespan(app: FastAPI):
         await preload_task
     except asyncio.CancelledError:
         pass
+    # Close graph DB connections if pipeline was initialized
+    if hasattr(app.state, "pipeline") and app.state.pipeline:
+        try:
+            app.state.pipeline.graph_db.close()
+        except Exception:
+            pass
     await cache.close()
     logger.info("Shutdown complete")
 

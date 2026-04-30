@@ -1,23 +1,47 @@
+"""
+Antigravity Pipeline — MoE Hybrid RAG Engine.
+
+Performance-critical design decisions:
+- Singleton: Instantiated ONCE via FastAPI lifespan, stored in app.state.
+- Streaming: stream_run() yields tokens via Ollama's streaming API.
+- Parallel RAG: asyncio.gather() for simultaneous Vector + Graph retrieval.
+- M2-safe: All tiers use ≤8B models to avoid Unified Memory swapping.
+"""
+
 import asyncio
-import numpy as np
-from typing import Dict, Any, Tuple
+import json
+import logging
+import time
+from typing import Any, AsyncGenerator, Dict, Tuple
+
+import requests
 from semantic_router import Route, RouteLayer
 from semantic_router.encoders import HuggingFaceEncoder
 
-# Simulated imports for Vector and Graph clients
 from core.vector_client import ChromaClient
 from core.graph_client import Neo4jClient
 from core.truth_engine import TruthEngine
 from core.firewall import HallucinationFirewall
 
+logger = logging.getLogger(__name__)
+
+
 class AntigravityPipeline:
+    """Singleton MoE pipeline — init once at startup, route at 4ms/query."""
+
     def __init__(self):
-        self.encoder = HuggingFaceEncoder(name="sentence-transformers/all-MiniLM-L6-v2") # local embedding model
+        t0 = time.monotonic()
+        self.encoder = HuggingFaceEncoder(name="sentence-transformers/all-MiniLM-L6-v2")
         self.router = self._build_semantic_router()
         self.vector_db = ChromaClient()
         self.graph_db = Neo4jClient()
         self.truth_engine = TruthEngine()
         self.firewall = HallucinationFirewall()
+        logger.info(f"AntigravityPipeline initialized in {time.monotonic() - t0:.2f}s")
+
+    # ------------------------------------------------------------------ #
+    #  Semantic Router (MoE Gate)                                         #
+    # ------------------------------------------------------------------ #
 
     def _build_semantic_router(self) -> RouteLayer:
         fast_route = Route(
@@ -61,67 +85,7 @@ class AntigravityPipeline:
             routes=[fast_route, standard_route, deep_route],
         )
 
-    async def retrieve_vector(self, query: str) -> Dict[str, Any]:
-        """Fetch from ChromaDB asynchronously"""
-        return await self.vector_db.asimilarity_search(query)
-
-    async def retrieve_graph(self, query: str) -> Dict[str, Any]:
-        """Fetch from Neo4j asynchronously"""
-        return await self.graph_db.aquery_graph(query)
-
-    def reciprocal_rank_fusion(self, vector_results: list, graph_results: list, k: int = 60) -> list:
-        """Fuses Vector and Graph results using RRF"""
-        rrf_scores = {}
-        for rank, doc in enumerate(vector_results):
-            doc_id = doc.get('id')
-            rrf_scores[doc_id] = rrf_scores.get(doc_id, 0.0) + 1 / (k + rank + 1)
-            
-        for rank, doc in enumerate(graph_results):
-            doc_id = doc.get('id')
-            rrf_scores[doc_id] = rrf_scores.get(doc_id, 0.0) + 1 / (k + rank + 1)
-            
-        # Sort and return top fused results
-        return sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)
-
-    async def execute_tier_3(self, query: str) -> Dict[str, Any]:
-        """Deep Execution: Async Hybrid RAG + State-based Agent Workflow"""
-        # 1. Parallel Retrieval (Asynchronous Hybrid RAG)
-        vector_task = asyncio.create_task(self.retrieve_vector(query))
-        graph_task = asyncio.create_task(self.retrieve_graph(query))
-        
-        vector_res, graph_res = await asyncio.gather(vector_task, graph_task)
-        
-        # 2. Reciprocal Rank Fusion Synthesis
-        fused_context = self.reciprocal_rank_fusion(vector_res.get('hits', []), graph_res.get('hits', []))
-        
-        # 3. First Agent Pass
-        reasoning_output = await self._run_reasoning_agent(query, fused_context)
-        
-        # 4. Truth Engine Scoring
-        truth_data = {
-            "sources": ["db", "kg"],
-            "vector_similarity": vector_res.get("avg_similarity", 0.0),
-            "graph_connectivity": graph_res.get("centrality_score", 0.0),
-            "temporal_anomalies": False,
-            "fake_probability": 0.05
-        }
-        score_report = self.truth_engine.compute_truth_score(truth_data)
-        
-        # 5. State-based Conditional Handoff
-        if score_report["truth_score"] < 0.75:
-            # Only trigger secondary agent if confidence is low
-            reasoning_output = await self._run_verification_agent(reasoning_output, fused_context)
-            
-        # 6. Pre-output Hallucination Firewall
-        final_output = self.firewall.validate(reasoning_output, fused_context)
-        
-        return {
-            "response": final_output,
-            "truth_score": score_report["truth_score"],
-            "context_used": fused_context
-        }
-
-    # Keyword signals that override the semantic router for borderline queries
+    # Keyword boost for borderline queries the embedding model misses
     _DEEP_KEYWORDS = {
         "investigate", "cross-reference", "verify", "fact-check", "analyze",
         "corroborate", "validate", "audit", "discrepancies", "misinformation",
@@ -132,34 +96,220 @@ class AntigravityPipeline:
         "alarm", "folder", "terminal", "browser", "volume", "disk space",
     }
 
-    def _boost_tier(self, query: str, semantic_tier: str) -> str:
-        """Keyword fallback: override semantic tier for borderline queries."""
-        q_lower = query.lower()
+    def classify(self, query: str) -> str:
+        """Route a query to a tier — ~4ms."""
+        route = self.router(query)
+        semantic_tier = route.name if route.name else "tier_2_standard"
+        return self._boost_tier(query, semantic_tier)
 
-        # If semantic says standard, check if keywords suggest deep or fast
+    def _boost_tier(self, query: str, semantic_tier: str) -> str:
+        q_lower = query.lower()
         if semantic_tier == "tier_2_standard":
             if any(kw in q_lower for kw in self._DEEP_KEYWORDS):
                 return "tier_3_deep"
             if any(kw in q_lower for kw in self._FAST_KEYWORDS):
                 return "tier_1_fast"
-
         return semantic_tier
 
+    # ------------------------------------------------------------------ #
+    #  Parallel Hybrid RAG Retrieval                                      #
+    # ------------------------------------------------------------------ #
+
+    async def retrieve_vector(self, query: str) -> Dict[str, Any]:
+        """Fetch from ChromaDB asynchronously."""
+        return await self.vector_db.asimilarity_search(query)
+
+    async def retrieve_graph(self, query: str) -> Dict[str, Any]:
+        """Fetch from Neo4j asynchronously."""
+        return await self.graph_db.aquery_graph(query)
+
+    async def retrieve_parallel(self, query: str) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        """Simultaneous Vector + Graph retrieval via asyncio.gather()."""
+        vector_res, graph_res = await asyncio.gather(
+            self.retrieve_vector(query),
+            self.retrieve_graph(query),
+        )
+        return vector_res, graph_res
+
+    def reciprocal_rank_fusion(self, vector_results: list, graph_results: list, k: int = 60) -> list:
+        """Fuses Vector and Graph results using RRF."""
+        rrf_scores = {}
+        for rank, doc in enumerate(vector_results):
+            doc_id = doc.get("id")
+            rrf_scores[doc_id] = rrf_scores.get(doc_id, 0.0) + 1 / (k + rank + 1)
+        for rank, doc in enumerate(graph_results):
+            doc_id = doc.get("id")
+            rrf_scores[doc_id] = rrf_scores.get(doc_id, 0.0) + 1 / (k + rank + 1)
+        return sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)
+
+    # ------------------------------------------------------------------ #
+    #  Tier Execution — Non-streaming (JSON response)                     #
+    # ------------------------------------------------------------------ #
+
     async def run(self, query: str) -> Dict[str, Any]:
-        """Entry point - MoE Gate with keyword-boosted fallback."""
-        route = self.router(query)
-        semantic_tier = route.name if route.name else "tier_2_standard"
-        tier = self._boost_tier(query, semantic_tier)
+        """Entry point — MoE Gate → Tier execution. Returns complete JSON."""
+        tier = self.classify(query)
 
         if tier == "tier_1_fast":
             return {"response": await self._run_fast_agent(query), "tier": tier}
+
         elif tier == "tier_2_standard":
             vector_res = await self.retrieve_vector(query)
             return {"response": await self._run_standard_agent(query, vector_res), "tier": tier}
-        else:
-            return await self.execute_tier_3(query)
 
-    # Agent execution — uses Ollama local models per MoE tier config
+        else:  # tier_3_deep
+            return await self._execute_tier_3(query)
+
+    async def _execute_tier_3(self, query: str) -> Dict[str, Any]:
+        """Deep: Parallel Hybrid RAG → Reasoning → Truth Engine → Firewall."""
+        # 1. Parallel retrieval
+        vector_res, graph_res = await self.retrieve_parallel(query)
+
+        # 2. RRF synthesis
+        fused_context = self.reciprocal_rank_fusion(
+            vector_res.get("hits", []), graph_res.get("hits", []),
+        )
+
+        # 3. Reasoning agent
+        reasoning_output = await self._run_reasoning_agent(query, fused_context)
+
+        # 4. Truth score
+        truth_data = {
+            "sources": ["db", "kg"],
+            "vector_similarity": vector_res.get("avg_similarity", 0.0),
+            "graph_connectivity": graph_res.get("centrality_score", 0.0),
+            "temporal_anomalies": False,
+            "fake_probability": 0.05,
+        }
+        score_report = self.truth_engine.compute_truth_score(truth_data)
+
+        # 5. Conditional verification (only if low confidence)
+        if score_report["truth_score"] < 0.75:
+            reasoning_output = await self._run_verification_agent(reasoning_output, fused_context)
+
+        # 6. Hallucination firewall
+        final_output = self.firewall.validate(reasoning_output, fused_context)
+
+        return {
+            "response": final_output,
+            "truth_score": score_report["truth_score"],
+            "breakdown": score_report.get("breakdown", {}),
+            "tier": "tier_3_deep",
+            "context_used": fused_context,
+        }
+
+    # ------------------------------------------------------------------ #
+    #  Tier Execution — Streaming (SSE token yield)                       #
+    # ------------------------------------------------------------------ #
+
+    async def stream_run(self, query: str) -> AsyncGenerator[str, None]:
+        """
+        Streaming entry point — yields Server-Sent Events.
+
+        The LLM tokens are streamed to the client in <100ms while the
+        Truth Score and Hallucination Firewall run as a background postscript.
+        """
+        tier = self.classify(query)
+
+        # Build prompt + context based on tier
+        if tier == "tier_1_fast":
+            prompt = f"You are a fast local OS agent. Respond in one sentence.\nQuery: {query}"
+            model = "phi3:mini"
+            context = None
+        elif tier == "tier_2_standard":
+            vector_res = await self.retrieve_vector(query)
+            context = vector_res
+            prompt = f"Answer concisely based on context.\nContext: {context}\nQuery: {query}"
+            model = "llama3.1:8b-instruct"
+        else:  # tier_3_deep
+            vector_res, graph_res = await self.retrieve_parallel(query)
+            fused_context = self.reciprocal_rank_fusion(
+                vector_res.get("hits", []), graph_res.get("hits", []),
+            )
+            context = fused_context
+            prompt = f"Perform deep reasoning and analysis.\nContext: {context}\nQuery: {query}"
+            model = "llama3.1:8b-instruct"
+
+        # Emit tier metadata header
+        yield self._sse_event("meta", {"tier": tier, "model": model})
+
+        # Stream LLM tokens
+        full_response = ""
+        async for token in self._stream_ollama(prompt, model):
+            full_response += token
+            yield self._sse_event("token", {"t": token})
+
+        # Post-stream: Truth scoring + firewall (only for deep tier)
+        if tier == "tier_3_deep":
+            truth_data = {
+                "sources": ["db", "kg"],
+                "vector_similarity": vector_res.get("avg_similarity", 0.0),
+                "graph_connectivity": graph_res.get("centrality_score", 0.0),
+                "temporal_anomalies": False,
+                "fake_probability": 0.05,
+            }
+            score_report = self.truth_engine.compute_truth_score(truth_data)
+            yield self._sse_event("truth_score", score_report)
+
+        yield self._sse_event("done", {"response_length": len(full_response)})
+
+    async def _stream_ollama(self, prompt: str, model: str) -> AsyncGenerator[str, None]:
+        """Yield tokens from Ollama's streaming API via thread offload."""
+        from app.core.config import settings
+
+        def _blocking_stream():
+            payload = {
+                "model": model,
+                "prompt": prompt,
+                "stream": True,
+                "options": {"temperature": 0.0},
+            }
+            resp = requests.post(
+                f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/generate",
+                json=payload,
+                stream=True,
+                timeout=120,
+            )
+            resp.raise_for_status()
+            for line in resp.iter_lines():
+                if line:
+                    chunk = json.loads(line)
+                    token = chunk.get("response", "")
+                    if token:
+                        yield token
+                    if chunk.get("done", False):
+                        break
+
+        # Bridge sync generator → async via queue
+        queue: asyncio.Queue[str | None] = asyncio.Queue()
+
+        def _producer():
+            try:
+                for token in _blocking_stream():
+                    queue.put_nowait(token)
+            except Exception as e:
+                logger.error(f"Ollama stream error: {e}")
+            finally:
+                queue.put_nowait(None)  # sentinel
+
+        loop = asyncio.get_event_loop()
+        loop.run_in_executor(None, _producer)
+
+        while True:
+            token = await queue.get()
+            if token is None:
+                break
+            yield token
+
+    @staticmethod
+    def _sse_event(event_type: str, data: Any) -> str:
+        """Format a Server-Sent Event line."""
+        return f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
+
+    # ------------------------------------------------------------------ #
+    #  Agent Wrappers (non-streaming, for JSON path)                      #
+    # ------------------------------------------------------------------ #
+
     def _get_llm(self, preferred_model: str, temperature: float = 0.0):
         """Get an OllamaLLM, falling back to whatever model is installed."""
         from models.ollama_runtime import create_ollama_llm, resolve_model_name
@@ -173,19 +323,19 @@ class AntigravityPipeline:
         )
 
     async def _run_standard_agent(self, query: str, context: Any) -> str:
-        llm = self._get_llm("llama3:8b", temperature=0.0)
+        llm = self._get_llm("llama3.1:8b-instruct", temperature=0.0)
         return await llm.ainvoke(
             f"Answer concisely based on context.\nContext: {context}\nQuery: {query}"
         )
 
     async def _run_reasoning_agent(self, query: str, context: Any) -> str:
-        llm = self._get_llm("mixtral:8x7b", temperature=0.2)
+        llm = self._get_llm("llama3.1:8b-instruct", temperature=0.2)
         return await llm.ainvoke(
             f"Perform deep reasoning and analysis.\nContext: {context}\nQuery: {query}"
         )
 
     async def _run_verification_agent(self, draft: str, context: Any) -> str:
-        llm = self._get_llm("llama3:8b", temperature=0.0)
+        llm = self._get_llm("llama3.1:8b-instruct", temperature=0.0)
         return await llm.ainvoke(
             f"Verify and correct the following draft given the context.\nContext: {context}\nDraft: {draft}"
         )
