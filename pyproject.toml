@@ -38,3 +38,8 @@ include = ["*"]
 
 [tool.pyrefly]
 search_path = ["friday"]
+
+[dependency-groups]
+dev = [
+    "types-setuptools>=81.0.0.20260209",
+]
