@@ -2,8 +2,9 @@ import asyncio
 import json
 import logging
 import time
-from typing import Any, AsyncGenerator, Dict, Tuple
+from typing import Any, AsyncGenerator, Dict, Tuple, List, Optional
 import requests
+from datetime import datetime
 from semantic_router import Route, RouteLayer
 from semantic_router.encoders import HuggingFaceEncoder
 from core.vector_client import ChromaClient
@@ -26,8 +27,81 @@ class FridayPipeline:
         self.truth_engine = TruthEngine()
         self.firewall = HallucinationFirewall()
         self.mcp = mcp_manager
-        self.memory = []  # Added for conversation context
+        # Enhanced conversation memory with context persistence and personalization
+        self.memory = {
+            "conversation_history": [],  # List of exchanges
+            "user_preferences": {},      # User-specific preferences
+            "context_summary": "",       # Summary of ongoing context
+            "last_updated": datetime.now(),
+            "personalization_data": {},  # Learned user patterns
+            "max_history_length": 50     # Keep last 50 exchanges
+        }
         logger.info(f"FridayPipeline initialized in {time.monotonic() - t0:.2f}s")
+
+    def _update_conversation_memory(self, query: str, response: str, tier: str):
+        """Update conversation memory with new exchange"""
+        exchange = {
+            "timestamp": datetime.now().isoformat(),
+            "query": query,
+            "response": response,
+            "tier": tier,
+            "voice_mode": False  # Will be updated if needed
+        }
+        
+        # Add to history
+        self.memory["conversation_history"].append(exchange)
+        
+        # Keep only last N exchanges
+        if len(self.memory["conversation_history"]) > self.memory["max_history_length"]:
+            self.memory["conversation_history"] = self.memory["conversation_history"][-self.memory["max_history_length"]:]
+        
+        # Update last updated timestamp
+        self.memory["last_updated"] = datetime.now()
+        
+        # Update context summary periodically
+        if len(self.memory["conversation_history"]) % 5 == 0:  # Every 5 exchanges
+            self._update_context_summary()
+
+    def _update_context_summary(self):
+        """Generate a summary of recent conversation context"""
+        recent_exchanges = self.memory["conversation_history"][-5:]  # Last 5 exchanges
+        if not recent_exchanges:
+            self.memory["context_summary"] = ""
+            return
+            
+        # Simple summarization - in production would use LLM
+        topics = []
+        for exchange in recent_exchanges:
+            query_words = exchange["query"].lower().split()
+            # Extract meaningful words (simple approach)
+            meaningful_words = [w for w in query_words if len(w) > 3 and w not in ["what", "when", "where", "who", "how", "the", "and", "for", "are", "is", "it"]]
+            topics.extend(meaningful_words[:3])  # Top 3 words per query
+            
+        # Create summary
+        unique_topics = list(set(topics))[:10]  # Limit to 10 unique topics
+        self.memory["context_summary"] = f"Recent topics: {', '.join(unique_topics)}" if unique_topics else ""
+
+    def _get_conversation_context(self) -> str:
+        """Get formatted conversation context for LLM prompts"""
+        if not self.memory["conversation_history"]:
+            return ""
+            
+        recent = self.memory["conversation_history"][-3:]  # Last 3 exchanges
+        context_parts = []
+        for exchange in recent:
+            context_parts.append(f"User: {exchange['query']}")
+            context_parts.append(f"Assistant: {exchange['response'][:100]}...")  # Truncate response
+            
+        return "\n".join(context_parts)
+
+    def _update_user_preference(self, key: str, value: Any):
+        """Update user preference"""
+        self.memory["user_preferences"][key] = value
+        self.memory["last_updated"] = datetime.now()
+
+    def _get_user_preference(self, key: str, default: Any = None) -> Any:
+        """Get user preference"""
+        return self.memory["user_preferences"].get(key, default)
 
     def _build_semantic_router(self) -> RouteLayer:
         fast_route = Route(
@@ -161,21 +235,29 @@ class FridayPipeline:
         tier = self.classify(query)
         if tier == "tier_1_fast":
             if any(kw in query.lower() for kw in self._FAST_KEYWORDS):
-                return {"response": await self._run_mcp_agent(query), "tier": tier}
+                response = await self._run_mcp_agent(query)
+                self._update_conversation_memory(query, response, tier)
+                return {"response": response, "tier": tier}
+            response = await self._run_fast_agent(query, voice_mode=voice_mode)
+            self._update_conversation_memory(query, response, tier)
             return {
-                "response": await self._run_fast_agent(query, voice_mode=voice_mode),
+                "response": response,
                 "tier": tier,
             }
         elif tier == "tier_2_standard":
             vector_res = await self.retrieve_vector(query)
+            response = await self._run_standard_agent(
+                query, vector_res, voice_mode=voice_mode
+            )
+            self._update_conversation_memory(query, response, tier)
             return {
-                "response": await self._run_standard_agent(
-                    query, vector_res, voice_mode=voice_mode
-                ),
+                "response": response,
                 "tier": tier,
             }
         else:
-            return await self._execute_tier_3(query, voice_mode=voice_mode)
+            result = await self._execute_tier_3(query, voice_mode=voice_mode)
+            self._update_conversation_memory(query, result["response"], result.get("tier", "tier_3_deep"))
+            return result
 
     async def _execute_tier_3(
         self, query: str, voice_mode: bool = False
@@ -351,7 +433,15 @@ class FridayPipeline:
             else "Respond in one sentence."
         )
         llm = self._get_llm("phi3:mini", temperature=0.0)
-        return await llm.ainvoke(f"You are Friday. {instruction}\nQuery: {query}")
+        
+        # Add conversation context if available
+        context_prompt = ""
+        if self.memory["conversation_history"]:
+            context_prompt = f"Previous conversation context:\n{self._get_conversation_context()}\n\n"
+        
+        return await llm.ainvoke(
+            f"You are Friday. {context_prompt}{instruction}\nQuery: {query}"
+        )
 
     async def _run_standard_agent(
         self, query: str, context: Any, voice_mode: bool = False
@@ -360,8 +450,14 @@ class FridayPipeline:
             "Be conversational and brief." if voice_mode else "Answer concisely."
         )
         llm = self._get_llm("llama3.1:8b-instruct", temperature=0.0)
+        
+        # Add conversation context if available
+        conversation_context = ""
+        if self.memory["conversation_history"]:
+            conversation_context = f"Previous conversation context:\n{self._get_conversation_context()}\n\n"
+        
         return await llm.ainvoke(
-            f"{instruction} based on context.\nContext: {context}\nQuery: {query}"
+            f"You are Friday. {conversation_context}{instruction} based on context.\nContext: {context}\nQuery: {query}"
         )
 
     async def _run_reasoning_agent(
@@ -371,10 +467,29 @@ class FridayPipeline:
             "Be conversational and brief." if voice_mode else "Perform deep reasoning."
         )
         llm = self._get_llm("llama3.1:8b-instruct", temperature=0.2)
-        return await llm.ainvoke(f"{instruction}\nContext: {context}\nQuery: {query}")
+        
+        # Add conversation context if available
+        conversation_context = ""
+        if self.memory["conversation_history"]:
+            conversation_context = f"Previous conversation context:\n{self._get_conversation_context()}\n\n"
+        
+        # Add contextual awareness for proactive suggestions
+        proactive_context = ""
+        if self.memory["context_summary"]:
+            proactive_context = f"Context awareness: {self.memory['context_summary']}\n"
+        
+        return await llm.ainvoke(
+            f"You are Friday. {proactive_context}{conversation_context}{instruction}\nContext: {context}\nQuery: {query}"
+        )
 
     async def _run_verification_agent(self, draft: str, context: Any) -> str:
         llm = self._get_llm("llama3.1:8b-instruct", temperature=0.0)
+        
+        # Add conversation context if available
+        conversation_context = ""
+        if self.memory["conversation_history"]:
+            conversation_context = f"Previous conversation context:\n{self._get_conversation_context()}\n\n"
+        
         return await llm.ainvoke(
-            f"Verify and correct the following draft given the context.\nContext: {context}\nDraft: {draft}"
+            f"You are Friday. {conversation_context}Verify and correct the following draft given the context.\nContext: {context}\nDraft: {draft}"
         )

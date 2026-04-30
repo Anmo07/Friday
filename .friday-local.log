@@ -1,0 +1,45 @@
+INFO:     Started server process [60294]
+INFO:     Waiting for application startup.
+2026-04-30 23:31:46,045 [INFO] app.core.cache: Redis cache connected: redis://localhost:6379/0
+2026-04-30 23:31:49,876 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-04-30 23:31:49,878 [WARNING] huggingface_hub.utils._http: Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-04-30 23:31:49,934 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/c9745ed1d9f207416be6d2e6f8de32d1f16199bf/config.json "HTTP/1.1 200 OK"
+2026-04-30 23:31:50,388 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/tokenizer_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-04-30 23:31:50,442 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/c9745ed1d9f207416be6d2e6f8de32d1f16199bf/tokenizer_config.json "HTTP/1.1 200 OK"
+2026-04-30 23:31:50,798 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/models/sentence-transformers/all-MiniLM-L6-v2/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-04-30 23:31:51,268 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/models/sentence-transformers/all-MiniLM-L6-v2/tree/main?recursive=true&expand=false "HTTP/1.1 200 OK"
+2026-04-30 23:31:51,821 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-04-30 23:31:51,866 [INFO] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/c9745ed1d9f207416be6d2e6f8de32d1f16199bf/config.json "HTTP/1.1 200 OK"
+Loading weights:   0%|          | 0/103 [00:00<?, ?it/s]Loading weights: 100%|██████████| 103/103 [00:00<00:00, 13620.45it/s]
+[1mBertModel LOAD REPORT[0m from: sentence-transformers/all-MiniLM-L6-v2
+Key                     | Status     |  | 
+------------------------+------------+--+-
+embeddings.position_ids | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED:	can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+[32m2026-04-30 23:31:52 INFO semantic_router.utils.logger Initializing RouteLayer[0m
+2026-04-30 23:31:52,076 [INFO] core.pipeline: FridayPipeline initialized in 5.67s
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
+INFO:     127.0.0.1:57849 - "GET /api/v1/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57854 - "POST /api/v1/query HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57864 - "GET /api/v1/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57866 - "WebSocket /ws/stream" [accepted]
+2026-04-30 23:33:19,452 [INFO] app.api.websocket: WebSocket client connected: /ws/stream
+INFO:     connection open
+2026-04-30 23:33:19,454 [INFO] app.api.websocket: WebSocket client connected: /ws/stream
+INFO:     connection closed
+INFO:     127.0.0.1:57872 - "POST /api/v1/feedback HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:57877 - "POST /api/v1/feedback HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57892 - "POST /api/v1/feedback HTTP/1.1" 200 OK
+2026-04-30 23:36:25,759 [WARNING] root: No API keys were configured. Generated an ephemeral local development key. Set VERITAS_DEV_API_KEY and VERITAS_ENTERPRISE_API_KEY in production.
+INFO:     127.0.0.1:57895 - "POST /api/v1/verify-news HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:58307 - "GET /api/v1/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58309 - "WebSocket /ws/stream" [accepted]
+2026-05-01 00:19:27,588 [INFO] app.api.websocket: WebSocket client connected: /ws/stream
+INFO:     connection open
+2026-05-01 00:19:27,591 [INFO] app.api.websocket: WebSocket client connected: /ws/stream
+INFO:     connection closed
+arn(

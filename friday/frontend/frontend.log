@@ -1,0 +1,20 @@
+
+> veritas-ai-dashboard@0.1.4 dev
+> next dev
+
+  ▲ Next.js 14.2.5
+  - Local:        http://localhost:3000
+
+ ✓ Starting...
+ ✓ Ready in 1473ms
+ ○ Compiling / ...
+ ✓ Compiled / in 1242ms (537 modules)
+ GET / 200 in 1330ms
+ ✓ Compiled in 161ms (275 modules)
+ ✓ Compiled /dashboard in 222ms (579 modules)
+ GET /dashboard 200 in 252ms
+ GET /dashboard 200 in 111ms
+ ✓ Compiled /_not-found in 254ms (575 modules)
+ GET /apple-touch-icon-precomposed.png 404 in 323ms
+ GET /apple-touch-icon.png 404 in 318ms
+ GET /dashboard 200 in 24ms

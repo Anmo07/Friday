@@ -1,0 +1,13 @@
+{
+    "allowed_commands": [
+        "ls",
+        "pwd",
+        "date",
+        "uptime",
+        "python3"
+    ],
+    "restricted_paths": [
+        "/etc",
+        "/var"
+    ]
+}
