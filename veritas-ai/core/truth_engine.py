@@ -56,18 +56,28 @@ class TruthEngine:
         """
         return 0.3 if anomalies_detected else 0.9
 
-    def calculate_claim_verifiability(self, rag_hits: int, kg_hits: int = 0) -> float:
+    def calculate_claim_verifiability(self, vector_similarity: float = 0.0, graph_connectivity: float = 0.0) -> float:
         """
-        Checks if claim appears in internal memory boundaries (RAG + pending Knowledge Graph).
+        Integrates both Graph Connectivity and Vector Similarity weights.
+        Vector similarity (0.0 to 1.0) measures semantic closeness in ChromaDB.
+        Graph connectivity (0.0 to 1.0) measures entity relationship strength in Neo4j.
         """
-        total_hits = rag_hits + kg_hits
-        if total_hits >= 3:
+        # Antigravity Fusion Weights
+        VECTOR_WEIGHT = 0.4
+        GRAPH_WEIGHT = 0.6  # Graph relationships usually imply stronger verifiable facts
+        
+        # Combine the scores
+        fusion_score = (vector_similarity * VECTOR_WEIGHT) + (graph_connectivity * GRAPH_WEIGHT)
+        
+        # Apply non-linear scaling to reward highly verifiable claims
+        if fusion_score >= 0.85:
             return 1.0
-        if total_hits == 2:
+        elif fusion_score >= 0.65:
             return 0.8
-        if total_hits == 1:
+        elif fusion_score >= 0.4:
             return 0.5
-        return 0.2
+        else:
+            return 0.2
 
     def calculate_bias_deviation(self, fake_news_probability: float) -> float:
         """
@@ -85,10 +95,14 @@ class TruthEngine:
             data.get("conflicting_sources", 0)
         )
         temporal_score = self.calculate_temporal_consistency(data.get("temporal_anomalies", False))
+        
+        # --- NEW: Hybrid RAG Verifiability ---
         verifiability_score = self.calculate_claim_verifiability(
-            data.get("rag_hits", 0),
-            data.get("kg_hits", 0)
+            vector_similarity=data.get("vector_similarity", 0.0),
+            graph_connectivity=data.get("graph_connectivity", 0.0)
         )
+        # -------------------------------------
+        
         bias_score = self.calculate_bias_deviation(data.get("fake_probability", 0.0))
 
         final_score = (
@@ -107,8 +121,11 @@ class TruthEngine:
             "bias_deviation": round(bias_score, 3)
         }
 
-        from core.observability import observability
-        observability.log_truth_score(round(final_score, 3), breakdown)
+        try:
+            from core.observability import observability
+            observability.log_truth_score(round(final_score, 3), breakdown)
+        except ImportError:
+            pass
 
         return {
             "truth_score": round(final_score, 3),

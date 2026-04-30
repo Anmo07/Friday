@@ -1,0 +1,31 @@
+moe_router:
+  embedding_model: "nomic-embed-text"
+  threshold_confidence: 0.75
+  
+tiers:
+  tier_1_fast:
+    description: "Direct OS/Local operations. No RAG."
+    model: "phi3:mini"
+    ollama_config:
+      num_ctx: 2048
+      num_thread: 8
+      f16_kv: true      # Apple Silicon Metal-optimized KV cache
+      keep_alive: "10m" # Keep fast router model warm in RAM
+      
+  tier_2_standard:
+    description: "Vector-only RAG for factual lookup."
+    model: "llama3:8b"
+    ollama_config:
+      num_ctx: 4096
+      num_thread: 8
+      f16_kv: true
+      keep_alive: "5m"
+      
+  tier_3_deep:
+    description: "Full Hybrid RAG (Graph + Vector) + Multi-agent verification."
+    model: "mixtral:8x7b" # Or equivalent heavy reasoning model
+    ollama_config:
+      num_ctx: 8192
+      num_thread: 8
+      f16_kv: true
+      keep_alive: "0"   # Unload immediately after Deep ops to free Unified Memory
