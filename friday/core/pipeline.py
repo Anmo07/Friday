@@ -218,15 +218,19 @@ class FridayPipeline:
 
         from models.ollama_runtime import resolve_model_name
 
-        # System instructions for voice mode
+        # System instructions for voice mode (2026 Friday Standard)
         voice_instructions = ""
         if voice_mode:
-            voice_instructions = "PRIORITY: Be extremely brief. Use conversational prosody. No markdown lists. "
+            voice_instructions = (
+                "SYSTEM: You are Friday. Priority: Brevity. Response must be <20 words. "
+                "Use conversational prosody (um, well, actually). No markdown. No lists. "
+                "Maintain a premium, helpful tone.\n"
+            )
 
         # Build prompt + context based on tier
         if tier == "tier_1_fast":
-            prompt = f"{voice_instructions}You are Friday, a fast local OS agent. Respond in one short sentence.\nQuery: {query}"
-            model = resolve_model_name(["llama3.1:8b", "phi3", "mistral", "llama3"]) or "llama3.1:8b"
+            prompt = f"{voice_instructions}You are Friday, a fast local OS agent. Execute and confirm.\nQuery: {query}"
+            model = resolve_model_name(["llama3.1:8b", "phi3", "mistral"]) or "llama3.1:8b"
             context = None
         elif tier == "tier_2_standard":
             vector_res = await self.retrieve_vector(query)

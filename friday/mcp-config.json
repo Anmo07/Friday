@@ -11,7 +11,8 @@
         "git",
         "cat",
         "grep",
-        "find"
+        "find",
+        "python3"
     ],
     "restricted_paths": [
         "/etc",

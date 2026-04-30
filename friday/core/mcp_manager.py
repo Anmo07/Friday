@@ -65,6 +65,17 @@ class MCPManager:
             }
         )
         self.register_tool(
+            "run_python_script",
+            "Execute a Python script and return the output.",
+            {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "string", "description": "The Python code to execute"},
+                },
+                "required": ["code"],
+            }
+        )
+        self.register_tool(
             "get_system_load",
             "Get current CPU and memory usage of the MacBook.",
             {"type": "object", "properties": {}}
@@ -132,6 +143,30 @@ class MCPManager:
                     return f.read(5000) # Limit to 5k chars
         except Exception as e:
             return f"Read failed: {str(e)}"
+
+    async def _handle_run_python_script(self, code: str) -> str:
+        """Execute Python code safely in a subprocess."""
+        try:
+            # Write code to temp file
+            with tempfile.NamedTemporaryFile(suffix=".py", delete=False) as tmp:
+                tmp.write(code.encode())
+                tmp_path = tmp.name
+
+            process = await asyncio.create_subprocess_exec(
+                "python3", tmp_path,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await process.communicate()
+            
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+
+            if stderr:
+                return f"Output: {stdout.decode()}\nError: {stderr.decode()}"
+            return stdout.decode() or "Python script executed successfully."
+        except Exception as e:
+            return f"Python execution failed: {str(e)}"
 
     async def _handle_get_system_load(self) -> str:
         try:

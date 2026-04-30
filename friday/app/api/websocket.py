@@ -281,8 +281,8 @@ async def ws_voice(websocket: WebSocket) -> None:
                     chunk_text = control.get("audio")
                     if isinstance(chunk_text, str):
                         buffered_chunks.append(chunk_text.encode("latin1", errors="ignore"))
-                        if len(buffered_chunks) % 3 == 0:
-                            partial = await transcribe_stream(buffered_chunks[-3:])
+                        if len(buffered_chunks) % 5 == 0: # Transcribe every 5 chunks for smoothness
+                            partial = await stt_service.transcribe_stream(buffered_chunks)
                             if partial:
                                 await _send_json(
                                     websocket,
