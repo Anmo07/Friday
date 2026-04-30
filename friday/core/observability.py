@@ -1,7 +1,7 @@
 import json
 import os
 from datetime import datetime, timezone
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 
 class ObservabilityLayer:
@@ -27,7 +27,7 @@ class ObservabilityLayer:
         latency: float,
         prompt_tokens: int,
         completion_tokens: int,
-        confidence: float = None,
+        confidence: Optional[float] = None,
     ):
         record = {
             "timestamp": datetime.now(timezone.utc).isoformat(),

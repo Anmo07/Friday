@@ -79,7 +79,7 @@ class MetricsCallbackHandler(BaseCallbackHandler):
             latency=latency,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
-            confidence=None,
+            confidence=0.0,
         )
 
 
