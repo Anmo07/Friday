@@ -1,11 +1,11 @@
-from app.voice.stt import transcribe
-from app.voice.tts import speak, set_voice
+from app.voice.stt_service import stt_service
+from app.voice.tts_service import tts_service
 from app.voice.emotion import detect_emotion
 from app.voice.listener import VoiceListener, listener
 
 
 async def voice_pipeline(audio: bytes) -> dict:
-    text = await transcribe(audio)
+    text = await stt_service.transcribe(audio)
     emotion = detect_emotion(text)
     return {
         "text": text,

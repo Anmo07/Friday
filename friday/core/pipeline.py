@@ -4,7 +4,7 @@ import logging
 import time
 from typing import Any, AsyncGenerator, Dict, Tuple
 import requests
-from semantic_router import Route, RouteLayer
+from semantic_router import Route, SemanticRouter
 from semantic_router.encoders import HuggingFaceEncoder
 from core.vector_client import ChromaClient
 from core.graph_client import Neo4jClient
@@ -28,7 +28,7 @@ class FridayPipeline:
         self.mcp = mcp_manager
         logger.info(f"FridayPipeline initialized in {time.monotonic() - t0:.2f}s")
 
-    def _build_semantic_router(self) -> RouteLayer:
+    def _build_semantic_router(self) -> SemanticRouter:
         fast_route = Route(
             name="tier_1_fast",
             utterances=[
@@ -81,7 +81,7 @@ class FridayPipeline:
                 "verify the accuracy of this scientific paper's conclusions",
             ],
         )
-        return RouteLayer(
+        return SemanticRouter(
             encoder=self.encoder, routes=[fast_route, standard_route, deep_route]
         )
 
