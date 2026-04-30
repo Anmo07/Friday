@@ -28,3 +28,6 @@
 {"timestamp": "2026-04-27T15:45:10.613550+00:00", "type": "truth_computation", "truth_score": 0.5, "breakdown": {"source_authority": 0.5, "cross_source_agreement": 0.5, "temporal_consistency": 0.9, "claim_verifiability": 0.2, "bias_deviation": 0.5}}
 {"timestamp": "2026-04-27T15:45:10.614194+00:00", "type": "truth_computation", "truth_score": 0.933, "breakdown": {"source_authority": 0.85, "cross_source_agreement": 1.0, "temporal_consistency": 0.9, "claim_verifiability": 1.0, "bias_deviation": 0.9}}
 {"timestamp": "2026-04-27T16:09:32.814256+00:00", "type": "llm_inference", "latency_seconds": 1.6625, "prompt_tokens": 0, "completion_tokens": 0, "confidence_score": null}
+{"timestamp": "2026-04-30T13:42:56.335831+00:00", "type": "llm_inference", "latency_seconds": 2.0816, "prompt_tokens": 0, "completion_tokens": 0, "confidence_score": null}
+{"timestamp": "2026-04-30T13:44:01.879914+00:00", "type": "llm_inference", "latency_seconds": 0.5388, "prompt_tokens": 0, "completion_tokens": 0, "confidence_score": null}
+{"timestamp": "2026-04-30T13:46:05.894919+00:00", "type": "truth_computation", "truth_score": 0.568, "breakdown": {"source_authority": 0.5, "cross_source_agreement": 0.5, "temporal_consistency": 0.9, "claim_verifiability": 0.2, "bias_deviation": 0.95}}

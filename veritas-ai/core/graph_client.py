@@ -42,12 +42,12 @@ class Neo4jClient:
             with driver.session() as session:
                 # Full-text search for entities related to the query
                 cypher = (
-                    "CALL db.index.fulltext.queryNodes('entity_index', $query) "
+                    "CALL db.index.fulltext.queryNodes('entity_index', $search_text) "
                     "YIELD node, score "
                     "RETURN node.id AS id, node.text AS text, score "
                     "LIMIT $limit"
                 )
-                result = session.run(cypher, query=query, limit=limit)
+                result = session.run(cypher, search_text=query, limit=limit)
                 hits = []
                 scores = []
                 for record in result:

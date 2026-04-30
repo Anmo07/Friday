@@ -211,16 +211,18 @@ class AntigravityPipeline:
         """
         tier = self.classify(query)
 
+        from models.ollama_runtime import resolve_model_name
+
         # Build prompt + context based on tier
         if tier == "tier_1_fast":
             prompt = f"You are a fast local OS agent. Respond in one sentence.\nQuery: {query}"
-            model = "phi3:mini"
+            model = resolve_model_name(["phi3:mini", "phi3", "mistral", "llama3"]) or "phi3:mini"
             context = None
         elif tier == "tier_2_standard":
             vector_res = await self.retrieve_vector(query)
             context = vector_res
             prompt = f"Answer concisely based on context.\nContext: {context}\nQuery: {query}"
-            model = "llama3.1:8b-instruct"
+            model = resolve_model_name(["llama3.1:8b-instruct", "llama3.1", "llama3", "mistral"]) or "llama3.1:8b-instruct"
         else:  # tier_3_deep
             vector_res, graph_res = await self.retrieve_parallel(query)
             fused_context = self.reciprocal_rank_fusion(
@@ -228,7 +230,7 @@ class AntigravityPipeline:
             )
             context = fused_context
             prompt = f"Perform deep reasoning and analysis.\nContext: {context}\nQuery: {query}"
-            model = "llama3.1:8b-instruct"
+            model = resolve_model_name(["llama3.1:8b-instruct", "llama3.1", "llama3", "mistral"]) or "llama3.1:8b-instruct"
 
         # Emit tier metadata header
         yield self._sse_event("meta", {"tier": tier, "model": model})
