@@ -26,6 +26,7 @@ class FridayPipeline:
         self.truth_engine = TruthEngine()
         self.firewall = HallucinationFirewall()
         self.mcp = mcp_manager
+        self.memory = []  # Added for conversation context
         logger.info(f"FridayPipeline initialized in {time.monotonic() - t0:.2f}s")
 
     def _build_semantic_router(self) -> SemanticRouter:
