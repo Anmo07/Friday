@@ -20,7 +20,18 @@ def _get_connection() -> sqlite3.Connection:
 
 def init_history_database() -> None:
     with closing(_get_connection()) as conn:
-        conn.execute()
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS query_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT,
+                query TEXT,
+                status TEXT,
+                truth_score REAL,
+                confidence_score REAL,
+                summary TEXT,
+                owner_email TEXT NOT NULL DEFAULT 'public'
+            )
+        """)
         try:
             conn.execute(
                 "ALTER TABLE query_history ADD COLUMN owner_email TEXT NOT NULL DEFAULT 'public'"
@@ -33,6 +44,10 @@ def init_history_database() -> None:
 def log_query_result(payload: QueryResponse, owner_email: str = "public") -> None:
     with closing(_get_connection()) as conn:
         conn.execute(
+            """
+            INSERT INTO query_history (timestamp, query, status, truth_score, confidence_score, summary, owner_email)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
             (
                 payload.timestamp,
                 payload.query,
@@ -53,6 +68,7 @@ def fetch_recent_history(
     with closing(_get_connection()) as conn:
         if owner_email:
             rows = conn.execute(
+                "SELECT * FROM query_history WHERE owner_email = ? ORDER BY timestamp DESC LIMIT ?",
                 (
                     owner_email,
                     effective_limit,
@@ -60,6 +76,7 @@ def fetch_recent_history(
             ).fetchall()
         else:
             rows = conn.execute(
+                "SELECT * FROM query_history ORDER BY timestamp DESC LIMIT ?",
                 (effective_limit,),
             ).fetchall()
     return [

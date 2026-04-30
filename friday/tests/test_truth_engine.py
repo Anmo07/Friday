@@ -20,8 +20,8 @@ def test_full_truth_score():
         "agreeing_sources": 2,
         "conflicting_sources": 0,
         "temporal_anomalies": False,
-        "rag_hits": 3,
-        "kg_hits": 0,
+        "vector_similarity": 0.9,
+        "graph_connectivity": 0.9,
         "fake_probability": 0.1,
     }
     result = engine.compute_truth_score(data)

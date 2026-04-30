@@ -4,7 +4,7 @@ import logging
 import time
 from typing import Any, AsyncGenerator, Dict, Tuple
 import requests
-from semantic_router import Route, SemanticRouter
+from semantic_router import Route, RouteLayer
 from semantic_router.encoders import HuggingFaceEncoder
 from core.vector_client import ChromaClient
 from core.graph_client import Neo4jClient
@@ -29,7 +29,7 @@ class FridayPipeline:
         self.memory = []  # Added for conversation context
         logger.info(f"FridayPipeline initialized in {time.monotonic() - t0:.2f}s")
 
-    def _build_semantic_router(self) -> SemanticRouter:
+    def _build_semantic_router(self) -> RouteLayer:
         fast_route = Route(
             name="tier_1_fast",
             utterances=[
@@ -82,7 +82,7 @@ class FridayPipeline:
                 "verify the accuracy of this scientific paper's conclusions",
             ],
         )
-        return SemanticRouter(
+        return RouteLayer(
             encoder=self.encoder, routes=[fast_route, standard_route, deep_route]
         )
 
@@ -296,11 +296,11 @@ class FridayPipeline:
         def _producer():
             try:
                 for token in _blocking_stream():
-                    queue.put_nowait(token)
+                    loop.call_soon_threadsafe(queue.put_nowait, token)
             except Exception as e:
                 logger.error(f"Ollama stream error: {e}")
             finally:
-                queue.put_nowait(None)
+                loop.call_soon_threadsafe(queue.put_nowait, None)
 
         loop = asyncio.get_event_loop()
         loop.run_in_executor(None, _producer)
@@ -326,16 +326,21 @@ class FridayPipeline:
         response = await llm.ainvoke(
             f"SYSTEM: You are Friday. Use tools to satisfy the request.\nTOOLS: {json.dumps(tools)}\nQuery: {query}"
         )
-        if "{" in response and "name" in response:
+        if "{" in response and "\"name\"" in response:
             try:
-                call_data = json.loads(
-                    response[response.find("{") : response.rfind("}") + 1]
-                )
-                tool_output = await self.mcp.execute_tool(
-                    call_data["name"], call_data.get("arguments", {})
-                )
-                return await llm.ainvoke(f"Tool Result: {tool_output}\nQuery: {query}")
-            except:
+                start_idx = response.find("{")
+                end_idx = response.rfind("}")
+                if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+                    json_str = response[start_idx : end_idx + 1]
+                    call_data = json.loads(json_str)
+                    if "name" in call_data:
+                        tool_output = await self.mcp.execute_tool(
+                            call_data["name"], call_data.get("arguments", {})
+                        )
+                        return await llm.ainvoke(f"Tool Result: {tool_output}\nQuery: {query}")
+                return response
+            except Exception as e:
+                logger.warning(f"Failed to parse or execute MCP tool: {e}")
                 return response
         return response
 

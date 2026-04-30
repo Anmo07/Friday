@@ -33,6 +33,14 @@ docker_start() {
   echo "Waiting for backend readiness..."
   if wait_for_url "http://localhost:8001/api/v1/health" 45 2; then
     echo "FRIDAY is up."
+    echo "Checking Ollama models..."
+    REQUIRED_MODELS=("phi3" "mistral")
+    for model in "${REQUIRED_MODELS[@]}"; do
+      if ! docker exec friday-ollama ollama list | grep -q "$model"; then
+        echo "Pulling $model..."
+        docker exec friday-ollama ollama pull "$model"
+      fi
+    done
     echo "Backend: http://localhost:8001/api/v1/health"
     echo "Frontend: http://localhost:3000"
   else

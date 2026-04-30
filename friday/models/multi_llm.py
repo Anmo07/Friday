@@ -142,7 +142,11 @@ class LLMManager:
         return [config.name for config in LLM_CONFIGS.values()]
 
 
-set_llm_cache(SQLiteCache(database_path=".veritas_llm_cache.db"))
+try:
+    set_llm_cache(SQLiteCache(database_path=".veritas_llm_cache.db"))
+except Exception as e:
+    logger.warning(f"LLM Cache initialization skipped or failed: {e}")
+
 llm_manager = LLMManager()
 
 

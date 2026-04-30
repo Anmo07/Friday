@@ -105,7 +105,10 @@ def resolve_model_name(
 ) -> Optional[str]:
     installed = list_installed_models(base_url)
     if not installed:
-        return None
+        # Try refreshing once if empty
+        installed = refresh_installed_models(base_url)
+        if not installed:
+            return None
     by_exact = {name.lower(): name for name in installed}
     by_base = {_normalize_model_name(name): name for name in installed}
     for candidate in preferred_models:

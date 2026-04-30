@@ -115,7 +115,16 @@ class MCPManager:
             return f"Error: {str(e)}"
 
     async def _handle_run_shell_command(self, command: str) -> str:
-        base_cmd = command.split()[0]
+        # Prevent command injection via separators
+        for separator in [";", "&", "|", "\n", "\r", "`", "$"]:
+            if separator in command:
+                return f"Error: Command contains forbidden character '{separator}'."
+        
+        parts = command.split()
+        if not parts:
+            return "Error: Empty command."
+            
+        base_cmd = parts[0]
         if base_cmd not in self.config.get("allowed_commands", []):
             return f"Error: Command '{base_cmd}' is not in the allowlist."
         try:
@@ -165,14 +174,26 @@ class MCPManager:
 
     async def _handle_get_system_load(self) -> str:
         try:
-            cpu = (
-                subprocess.check_output(["sysctl", "-n", "vm.loadavg"]).decode().strip()
+            # Use async process calls to avoid blocking the event loop
+            cpu_proc = await asyncio.create_subprocess_exec(
+                "sysctl", "-n", "vm.loadavg",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
             )
-            mem = (
-                subprocess.check_output(["top", "-l", "1", "-s", "0", "-n", "0"])
-                .decode()
-                .split("\n")[3]
+            mem_proc = await asyncio.create_subprocess_exec(
+                "top", "-l", "1", "-s", "0", "-n", "0",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
             )
+            
+            cpu_out, _ = await cpu_proc.communicate()
+            mem_out, _ = await mem_proc.communicate()
+            
+            cpu = cpu_out.decode().strip()
+            # Extract memory line safely
+            mem_lines = mem_out.decode().split("\n")
+            mem = mem_lines[3] if len(mem_lines) > 3 else "Unknown memory status"
+            
             return f"System Load (1/5/15 min): {cpu}\nMemory: {mem}"
         except Exception as e:
             return f"Failed to get stats: {str(e)}"

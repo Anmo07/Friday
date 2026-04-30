@@ -52,6 +52,8 @@ class FridayMenuApp(rumps.App):
         self.layer = FridayPipeline()
         self.loop = asyncio.new_event_loop()
         self.listening = True
+        self.current_task = None
+        self.current_proc = None
         t = threading.Thread(target=self.start_background_loop)
         t.daemon = True
         t.start()
@@ -87,7 +89,10 @@ class FridayMenuApp(rumps.App):
                     rumps.quit_application()
                     break
                 print(f"You (text): {user_input}")
-                asyncio.run_coroutine_threadsafe(
+                # Cancel previous task if a new one starts
+                if self.current_task:
+                    self.current_task.cancel()
+                self.current_task = asyncio.run_coroutine_threadsafe(
                     self.process_text(user_input), self.loop
                 )
             except (KeyboardInterrupt, EOFError):
@@ -177,10 +182,11 @@ class FridayMenuApp(rumps.App):
                             ) as tmp:
                                 tmp.write(audio_response)
                                 tmp_path = tmp.name
-                            proc = await asyncio.create_subprocess_exec(
+                            self.current_proc = await asyncio.create_subprocess_exec(
                                 "afplay", tmp_path
                             )
-                            await proc.wait()
+                            await self.current_proc.wait()
+                            self.current_proc = None
                             os.unlink(tmp_path)
                     audio_queue.task_done()
 
@@ -203,27 +209,53 @@ class FridayMenuApp(rumps.App):
                             current_sentence = parts[1] if len(parts) > 1 else ""
                             await audio_queue.put(sentence_to_speak)
                             break
+                if chunk.startswith("event: truth_score"):
+                    data = json.loads(chunk.split("data: ")[1])
+                    print(f"\n[Truth Score: {data.get('truth_score')}]")
             print()
             if current_sentence.strip():
                 await audio_queue.put(current_sentence)
             await audio_queue.put(None)
             await worker_task
+        except asyncio.CancelledError:
+            if self.current_proc:
+                try:
+                    self.current_proc.terminate()
+                except:
+                    pass
+            print("\n[Interrupted]")
         except Exception as e:
             print(f"\n[Error processing text]: {e}")
+        finally:
+            self.current_task = None
 
     async def process_audio(self, audio_bytes: bytes):
         try:
             from app.voice.stt_service import stt_service
-
             text = await stt_service.transcribe(audio_bytes)
+
             if not text or not text.strip():
                 print("[Transcription returned empty]")
                 return
             print(f"You: {text}")
+            
+            # Handle interruption
+            if text.strip().lower() in ["stop", "hold on", "quiet", "shut up"]:
+                if self.current_task:
+                    self.current_task.cancel()
+                    print("FRIDAY: Stopping as requested.")
+                return
+
             if text.strip().lower() in ["exit", "quit", "stop listening"]:
                 rumps.quit_application()
                 return
-            await self.process_text(text)
+            
+            # Cancel previous task if a new one starts
+            if self.current_task:
+                self.current_task.cancel()
+            
+            self.current_task = asyncio.create_task(self.process_text(text))
+            await self.current_task
         except Exception as e:
             print(f"\n[Error processing audio]: {e}")
 
