@@ -42,5 +42,11 @@ class TTSService:
         except Exception as e:
             logger.error(f"TTS Stream Error: {e}")
 
+    async def get_audio(self, text: str) -> bytes:
+        audio_data = b""
+        async for chunk in self.stream_audio(text):
+            audio_data += chunk
+        return audio_data
+
 
 tts_service = TTSService()

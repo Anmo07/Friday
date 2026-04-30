@@ -155,7 +155,7 @@ class FridayMenuApp(rumps.App):
 
     async def process_text(self, text: str):
         try:
-            from app.voice.tts import speak
+            from app.voice.tts_service import tts_service
 
             full_response = ""
             current_sentence = ""
@@ -169,7 +169,7 @@ class FridayMenuApp(rumps.App):
                         audio_queue.task_done()
                         break
                     if sentence.strip():
-                        audio_response = await speak(sentence.strip())
+                        audio_response = await tts_service.get_audio(sentence.strip())
                         if audio_response:
                             with tempfile.NamedTemporaryFile(
                                 suffix=".mp3", delete=False
@@ -212,9 +212,9 @@ class FridayMenuApp(rumps.App):
 
     async def process_audio(self, audio_bytes: bytes):
         try:
-            from app.voice.stt import transcribe
+            from app.voice.stt_service import stt_service
 
-            text = await transcribe(audio_bytes)
+            text = await stt_service.transcribe(audio_bytes)
             if not text or not text.strip():
                 print("[Transcription returned empty]")
                 return
