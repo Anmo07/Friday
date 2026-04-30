@@ -8,10 +8,15 @@ import warnings
 import speech_recognition as sr
 import rumps
 
+# Add project root to sys.path to resolve sibling packages
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 warnings.filterwarnings("ignore", category=UserWarning, module="langchain_core")
 warnings.filterwarnings("ignore", category=UserWarning, module="pydantic")
 warnings.filterwarnings("ignore")
-from core.conversation_layer import ConversationLayer
+from core.pipeline import FridayPipeline
 
 
 class FridayMenuApp(rumps.App):
@@ -43,7 +48,7 @@ class FridayMenuApp(rumps.App):
             self.open_ctrl_menu,
             None,
         ]
-        self.layer = ConversationLayer()
+        self.layer = FridayPipeline()
         self.loop = asyncio.new_event_loop()
         self.listening = True
         t = threading.Thread(target=self.start_background_loop)
@@ -58,7 +63,6 @@ class FridayMenuApp(rumps.App):
         try:
             print("Initializing FRIDAY...")
             asyncio.set_event_loop(self.loop)
-            self.loop.run_until_complete(self.layer.initialize())
             print("\nHello Boss. FRIDAY online. I'm listening...")
             print("(You can speak or type your commands here)\n")
             loop_thread = threading.Thread(target=self._run_async_loop)
@@ -180,10 +184,13 @@ class FridayMenuApp(rumps.App):
                     audio_queue.task_done()
 
             worker_task = asyncio.create_task(audio_worker())
-            async for chunk in self.layer.process_query_stream(text):
-                print(chunk, end="", flush=True)
-                full_response += chunk
-                current_sentence += chunk
+            async for chunk in self.layer.stream_run(text, voice_mode=True):
+                if chunk.startswith("event: token"):
+                    data = json.loads(chunk.split("data: ")[1])
+                    token = data.get("t", "")
+                    print(token, end="", flush=True)
+                    full_response += token
+                    current_sentence += token
                 if any(
                     punct in current_sentence
                     for punct in [". ", "! ", "? ", ".\n", "!\n", "?\n"]
