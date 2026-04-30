@@ -2,13 +2,10 @@ import asyncio
 import os
 import sys
 import time
-
 import pytest
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 pytest.importorskip("crewai")
-
 from pipelines import multi_agent_pipeline as pipeline
 
 
@@ -30,7 +27,6 @@ async def test_parallel_validation_runs_concurrently(monkeypatch):
         return kwargs["agent_name"]
 
     monkeypatch.setattr(pipeline, "_run_validation_agent", fake_run_validation_agent)
-
     start = time.perf_counter()
     result = await pipeline._run_parallel_validation(
         agents=_DummyAgents(),
@@ -38,7 +34,6 @@ async def test_parallel_validation_runs_concurrently(monkeypatch):
         raw_report="Synthetic report for concurrency validation.",
     )
     elapsed = time.perf_counter() - start
-
     assert elapsed < 0.22
     assert result["verification_result"] == "Verification Agent"
     assert result["fact_check_result"] == "Fact Checker"

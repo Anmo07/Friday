@@ -1,28 +1,20 @@
-"""Shared Ollama runtime helpers with graceful no-model handling."""
-
 from __future__ import annotations
-
 import asyncio
 import logging
 from functools import lru_cache
 from typing import Any, Iterable, Optional
-
 import requests
 from langchain_core.language_models.llms import LLM
-
 from app.core.config import settings
-
 
 logger = logging.getLogger(__name__)
 
 
 class OllamaModelUnavailableError(RuntimeError):
-    """Raised when the local Ollama server has no usable models."""
+    pass
 
 
 class OllamaLLM(LLM):
-    """Minimal LangChain-compatible Ollama wrapper without deprecated imports."""
-
     base_url: str = settings.OLLAMA_BASE_URL
     model: str
     temperature: float = 0.0
@@ -63,7 +55,6 @@ class OllamaLLM(LLM):
         )
         response.raise_for_status()
         text = response.json().get("response", "").strip()
-
         if stop:
             for token in stop:
                 if token and token in text:
@@ -87,7 +78,6 @@ def _normalize_model_name(name: str) -> str:
 
 @lru_cache(maxsize=4)
 def list_installed_models(base_url: str = settings.OLLAMA_BASE_URL) -> tuple[str, ...]:
-    """Return the installed model names exposed by the local Ollama server."""
     endpoint = f"{base_url.rstrip('/')}/api/tags"
     try:
         response = requests.get(endpoint, timeout=2)
@@ -96,13 +86,14 @@ def list_installed_models(base_url: str = settings.OLLAMA_BASE_URL) -> tuple[str
     except Exception as exc:
         logger.info("Ollama tags unavailable at %s: %s", endpoint, exc)
         return ()
-
     models = payload.get("models", [])
     names = [item.get("name", "").strip() for item in models if item.get("name")]
     return tuple(names)
 
 
-def refresh_installed_models(base_url: str = settings.OLLAMA_BASE_URL) -> tuple[str, ...]:
+def refresh_installed_models(
+    base_url: str = settings.OLLAMA_BASE_URL,
+) -> tuple[str, ...]:
     list_installed_models.cache_clear()
     return list_installed_models(base_url)
 
@@ -112,14 +103,11 @@ def resolve_model_name(
     *,
     base_url: str = settings.OLLAMA_BASE_URL,
 ) -> Optional[str]:
-    """Pick the first available installed model that matches the preferred list."""
     installed = list_installed_models(base_url)
     if not installed:
         return None
-
     by_exact = {name.lower(): name for name in installed}
     by_base = {_normalize_model_name(name): name for name in installed}
-
     for candidate in preferred_models:
         if not candidate:
             continue
@@ -129,7 +117,6 @@ def resolve_model_name(
         normalized = _normalize_model_name(candidate)
         if normalized in by_base:
             return by_base[normalized]
-
     return installed[0]
 
 
@@ -141,7 +128,6 @@ def create_ollama_llm(
     base_url: str = settings.OLLAMA_BASE_URL,
     timeout: int = 120,
 ) -> OllamaLLM:
-    """Create an Ollama-backed LLM using direct HTTP."""
     kwargs: dict[str, Any] = {
         "base_url": base_url,
         "model": model,

@@ -1,11 +1,7 @@
-"""FRIDAY personality and conversational style helpers."""
-
 from __future__ import annotations
-
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Iterable
-
 
 INTERRUPTION_PHRASES = (
     "stop",
@@ -13,8 +9,6 @@ INTERRUPTION_PHRASES = (
     "cancel",
     "hold on",
 )
-
-
 FILLER_PHRASES = (
     "I think",
     "It seems",
@@ -32,8 +26,6 @@ class FridayGreeting:
 
 
 class FridayPersonality:
-    """Tone and interaction rules for the FRIDAY assistant."""
-
     TRAITS = {
         "casual": True,
         "intelligent": True,
@@ -42,7 +34,6 @@ class FridayPersonality:
         "short_responses": True,
         "task_first": True,
     }
-
     ASSISTANT_PROMPT = (
         "You are FRIDAY, a voice-first AI assistant. "
         "You speak like a smart adult with light wit. "
@@ -50,7 +41,6 @@ class FridayPersonality:
         "Address the user as Boss. "
         "Default to action first, analysis second."
     )
-
     VERIFICATION_PROMPT = (
         "You are FRIDAY in verification mode. "
         "Be concise, grounded, and direct. "
@@ -62,7 +52,6 @@ class FridayPersonality:
     def startup_greeting(now: datetime | None = None) -> FridayGreeting:
         current = now or datetime.now()
         hour = current.hour
-
         if 5 <= hour < 12:
             return FridayGreeting(
                 period="morning",
@@ -82,9 +71,11 @@ class FridayPersonality:
             if mode == "verification"
             else FridayPersonality.ASSISTANT_PROMPT
         )
-
         if context == "urgent":
-            return base_prompt + " Prioritize the next useful step and keep it under two sentences."
+            return (
+                base_prompt
+                + " Prioritize the next useful step and keep it under two sentences."
+            )
         if context == "interruption":
             return base_prompt + " Stop immediately and acknowledge the interruption."
         return base_prompt
@@ -124,33 +115,30 @@ class FridayPersonality:
         cleaned = " ".join((text or "").split())
         if not cleaned:
             return "Still here, Boss."
-
         if cleaned == FridayPersonality.stopping_response():
             return cleaned
-
         for filler in FILLER_PHRASES:
             cleaned = cleaned.replace(f"{filler} ", "")
-
         cleaned = FridayPersonality.soften_uncertainty(cleaned)
-
         if "boss" not in cleaned.lower():
             if cleaned.endswith((".", "!", "?")):
                 cleaned = f"{cleaned[:-1]}, Boss{cleaned[-1]}"
             else:
                 cleaned = f"{cleaned}, Boss."
-
         if mode == "assistant" and len(cleaned) > 180:
             first_sentence = cleaned.split(". ", 1)[0].strip()
-            cleaned = first_sentence if first_sentence.endswith(".") else f"{first_sentence}."
-
+            cleaned = (
+                first_sentence if first_sentence.endswith(".") else f"{first_sentence}."
+            )
         return cleaned
 
     @staticmethod
     def build_news_summary(topic: str, headlines: Iterable[str]) -> str:
-        picks = [headline.strip() for headline in headlines if headline and headline.strip()]
+        picks = [
+            headline.strip() for headline in headlines if headline and headline.strip()
+        ]
         if not picks:
             return f"I couldn’t pull anything solid on {topic} just yet, Boss."
-
         top = picks[:3]
         if len(top) == 1:
             return f"Latest on {topic}: {top[0]}, Boss."

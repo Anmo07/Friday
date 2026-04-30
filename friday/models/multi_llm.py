@@ -3,12 +3,10 @@ import logging
 from typing import Any, Dict, List, Optional
 from dataclasses import dataclass
 from enum import Enum
-
 from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.globals import set_llm_cache
 from langchain_community.cache import SQLiteCache
-
-from config.settings import settings
+from app.core.config import settings
 from core.observability import observability
 from models.ollama_runtime import (
     OllamaLLM,
@@ -17,7 +15,6 @@ from models.ollama_runtime import (
     list_installed_models,
     OllamaModelUnavailableError,
 )
-
 
 logger = logging.getLogger(__name__)
 
@@ -74,12 +71,10 @@ class MetricsCallbackHandler(BaseCallbackHandler):
         end_time = time.time()
         start_time = self.start_times.pop(run_id, end_time)
         latency = end_time - start_time
-
         llm_output = response.llm_output or {}
         token_usage = llm_output.get("token_usage", {})
         prompt_tokens = token_usage.get("prompt_tokens", 0)
         completion_tokens = token_usage.get("completion_tokens", 0)
-
         observability.log_llm_metrics(
             latency=latency,
             prompt_tokens=prompt_tokens,
@@ -102,7 +97,12 @@ class LLMManager:
         if tier not in self._llms:
             config = LLM_CONFIGS.get(tier, LLM_CONFIGS[ModelTier.MEDIUM])
             resolved_model = require_model_name(
-                [config.name, settings.FAST_MODEL, settings.MODEL_NAME, settings.ROUTER_MODEL],
+                [
+                    config.name,
+                    settings.FAST_MODEL,
+                    settings.MODEL_NAME,
+                    settings.ROUTER_MODEL,
+                ],
                 base_url=settings.OLLAMA_BASE_URL,
             )
             self._llms[tier] = create_ollama_llm(
@@ -126,7 +126,6 @@ class LLMManager:
         if not installed:
             logger.info("No local Ollama models installed; skipping preload.")
             return []
-
         loaded_models = []
         for tier in [ModelTier.FAST, ModelTier.MEDIUM]:
             try:
@@ -144,8 +143,6 @@ class LLMManager:
 
 
 set_llm_cache(SQLiteCache(database_path=".veritas_llm_cache.db"))
-
-
 llm_manager = LLMManager()
 
 

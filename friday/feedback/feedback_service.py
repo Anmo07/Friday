@@ -4,13 +4,12 @@ import os
 import logging
 from contextlib import closing
 from typing import Literal, Optional
-
 from pydantic import BaseModel, field_validator
 
-# Ensure absolute SQLite storage mapping structurally resolving Docker volumes properly natively
 DB_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 os.makedirs(DB_DIR, exist_ok=True)
 DB_PATH = os.path.join(DB_DIR, "feedback_loop.sqlite")
+
 
 class UserFeedback(BaseModel):
     query: str
@@ -36,12 +35,12 @@ def _get_connection() -> sqlite3.Connection:
     conn.execute("PRAGMA synchronous=NORMAL")
     return conn
 
+
 def init_feedback_database():
-    """ Structurally scaffolds the localized proprietary dataset tables intelligently mapping limits natively """
     try:
         with closing(_get_connection()) as conn:
             cursor = conn.cursor()
-            cursor.execute('''
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS feedback_loop (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     timestamp TEXT,
@@ -53,41 +52,37 @@ def init_feedback_database():
                     pipeline_status TEXT,
                     owner_email TEXT NOT NULL DEFAULT 'public'
                 )
-            ''')
-            try:
-                cursor.execute("ALTER TABLE feedback_loop ADD COLUMN owner_email TEXT NOT NULL DEFAULT 'public'")
-            except sqlite3.OperationalError:
-                pass # Column exists
+            """)
             conn.commit()
-        logging.info("Feedback SQLite Array intrinsically provisioned safely.")
     except Exception as e:
-        logging.error(f"Failed propagating local SQL Database bounds organically: {e}")
+        logging.getLogger(__name__).error(f"Failed to init feedback DB: {e}")
 
-init_feedback_database()
 
-def process_and_log_feedback(feedback: UserFeedback, owner_email: str = 'public'):
-    """
-    Ingests explicit user disagreement signals.
-    Passively flags them as PENDING_VALIDATION for the Model Improvement cycles (Phase 30).
-    """
+def process_and_log_feedback(
+    feedback: UserFeedback, owner_email: str = "public"
+) -> dict:
     try:
+        ts = datetime.now().isoformat()
         with closing(_get_connection()) as conn:
             cursor = conn.cursor()
-            cursor.execute('''
+            cursor.execute(
+                """
                 INSERT INTO feedback_loop 
-                (timestamp, query, original_truth_score, user_flag, user_corrected_score, comments, pipeline_status, owner_email)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                datetime.utcnow().isoformat() + "Z",
-                feedback.query.strip(),
-                feedback.original_truth_score,
-                feedback.user_flag,
-                feedback.user_corrected_score,
-                feedback.comments.strip(),
-                "PENDING_VALIDATION",
-                owner_email
-            ))
+                (timestamp, query, original_truth_score, user_flag, user_corrected_score, comments, owner_email)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+                (
+                    ts,
+                    feedback.query,
+                    feedback.original_truth_score,
+                    feedback.user_flag,
+                    feedback.user_corrected_score,
+                    feedback.comments,
+                    owner_email,
+                ),
+            )
             conn.commit()
-        return {"status": "success", "tracking_stage": "PENDING_VALIDATION"}
+            return {"status": "success", "id": cursor.lastrowid}
     except Exception as e:
-        return {"status": "error", "message": f"Database ingestion crash intelligently avoided: {e}"}
+        logging.getLogger(__name__).error(f"Failed to log feedback: {e}")
+        return {"status": "error", "message": str(e)}

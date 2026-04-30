@@ -1,20 +1,14 @@
-"""Internet-aware enrichment with graceful offline fallback."""
-
 from __future__ import annotations
-
 import logging
 import socket
 from typing import Any
-
 import requests
-
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
 
 def is_online(host: str = "1.1.1.1", port: int = 53, timeout: float = 1.0) -> bool:
-    """Fast network reachability check."""
     try:
         with socket.create_connection((host, port), timeout=timeout):
             return True
@@ -39,12 +33,10 @@ def should_enrich(query: str) -> bool:
 
 
 def fetch_web_context(query: str) -> list[dict[str, Any]]:
-    """Return lightweight, citation-ready context from web APIs."""
     if not settings.WEB_ENRICHMENT_ENABLED:
         return []
     if not is_online():
         return []
-
     timeout = settings.WEB_ENRICHMENT_TIMEOUT_SECONDS
     results: list[dict[str, Any]] = []
     try:
@@ -58,7 +50,6 @@ def fetch_web_context(query: str) -> list[dict[str, Any]]:
     except Exception as exc:
         logger.debug("Web enrichment lookup failed: %s", exc)
         return []
-
     abstract = payload.get("AbstractText", "").strip()
     abstract_url = payload.get("AbstractURL", "").strip()
     if abstract:
@@ -70,7 +61,6 @@ def fetch_web_context(query: str) -> list[dict[str, Any]]:
                 "source": "duckduckgo",
             }
         )
-
     related = payload.get("RelatedTopics", [])
     for topic in related:
         if len(results) >= settings.WEB_ENRICHMENT_MAX_RESULTS:
@@ -84,5 +74,4 @@ def fetch_web_context(query: str) -> list[dict[str, Any]]:
                     "source": "duckduckgo",
                 }
             )
-
     return results[: settings.WEB_ENRICHMENT_MAX_RESULTS]

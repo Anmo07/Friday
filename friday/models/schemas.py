@@ -1,15 +1,21 @@
 from typing import Any, Dict, List, Literal, Optional
-
 from pydantic import BaseModel, Field
+
 
 class Source(BaseModel):
     url: str
     credibility_score: float = Field(ge=0.0, le=1.0)
-    type: Literal["official", "media", "social", "unknown"] = Field(description="official | media | social | unknown")
+    type: Literal["official", "media", "social", "unknown"] = Field(
+        description="official | media | social | unknown"
+    )
+
 
 class QueryRequest(BaseModel):
     query: str = Field(..., description="User query")
-    deep: bool = Field(default=False, description="If true, run the full deep analysis pipeline")
+    deep: bool = Field(
+        default=False, description="If true, run the full deep analysis pipeline"
+    )
+
 
 class QueryResponse(BaseModel):
     query: str

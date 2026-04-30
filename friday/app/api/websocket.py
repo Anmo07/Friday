@@ -1,14 +1,10 @@
-"""WebSocket endpoints for the FRIDAY assistant runtime."""
-
 from __future__ import annotations
-
 import asyncio
 import json
 import logging
 import time
 from contextlib import suppress
 from typing import Awaitable, Callable
-
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.core.cache import cache
 from app.voice.stt_service import stt_service
@@ -16,7 +12,6 @@ from app.voice.tts_service import tts_service
 from core.personality import friday_personality
 
 logger = logging.getLogger(__name__)
-
 ws_router = APIRouter()
 
 
@@ -27,7 +22,9 @@ async def _send_json(ws: WebSocket, data: dict) -> None:
         logger.debug("WebSocket send skipped; client likely disconnected")
 
 
-async def _send_progress(ws: WebSocket, stage: str, progress: int, message: str) -> None:
+async def _send_progress(
+    ws: WebSocket, stage: str, progress: int, message: str
+) -> None:
     await _send_json(
         ws,
         {
@@ -60,40 +57,33 @@ async def _create_progress_callback(
     return callback
 
 
-def _cacheable(intent: AssistantIntent) -> bool:
-    return intent.kind in {"chat", "verification"}
-
-
-
 async def _news_streamer(ws: WebSocket, query: str):
-    """Background task to stream live news updates."""
     from tools.news_api import news_search_tool
+
     seen_news = set()
     try:
         while True:
-            # Poll every 30 seconds for news updates in Control Room Mode
             news_data = await asyncio.to_thread(news_search_tool, query)
             if news_data and news_data not in seen_news:
                 seen_news.add(news_data)
-                await _send_json(ws, {
-                    "status": "update",
-                    "type": "news_flash",
-                    "data": {"update": news_data},
-                    "message": "Boss, I found fresh updates on that topic."
-                })
+                await _send_json(
+                    ws,
+                    {
+                        "status": "update",
+                        "type": "news_flash",
+                        "data": {"update": news_data},
+                        "message": "Boss, I found fresh updates on that topic.",
+                    },
+                )
             await asyncio.sleep(30)
     except asyncio.CancelledError:
         pass
 
+
 async def _handle_query(
-    websocket: WebSocket,
-    query: str,
-    *,
-    deep: bool,
-    tier: str,
+    websocket: WebSocket, query: str, *, deep: bool, tier: str
 ) -> None:
     start = time.monotonic()
-
     if tier != "tier_1_fast":
         await _send_progress(websocket, "cache_check", 5, "Checking memory...")
         cached = await cache.get(query)
@@ -109,14 +99,11 @@ async def _handle_query(
                 },
             )
             return
-
     pipeline = websocket.app.state.pipeline
     response = await pipeline.run(query)
     response["latency_ms"] = round((time.monotonic() - start) * 1000, 1)
-
     if tier != "tier_1_fast":
         await cache.set(query, response)
-
     await _send_json(
         websocket,
         {
@@ -132,7 +119,6 @@ async def _handle_query(
 async def ws_stream(websocket: WebSocket) -> None:
     await websocket.accept()
     logger.info("WebSocket client connected: /ws/stream")
-
     greeting = friday_personality.startup_greeting()
     await _send_json(
         websocket,
@@ -144,16 +130,13 @@ async def ws_stream(websocket: WebSocket) -> None:
             "mode": "assistant",
         },
     )
-
     current_task: asyncio.Task | None = None
-
     try:
         while True:
             raw = await websocket.receive_text()
             payload_type = "query"
             deep = False
             query = raw
-
             try:
                 message = json.loads(raw)
                 payload_type = message.get("type", "query")
@@ -161,9 +144,10 @@ async def ws_stream(websocket: WebSocket) -> None:
                 deep = bool(message.get("deep", False))
             except json.JSONDecodeError:
                 pass
-
             normalized_query = " ".join(str(query).split())
-            if payload_type == "interrupt" or friday_personality.detect_interruption(normalized_query):
+            if payload_type == "interrupt" or friday_personality.detect_interruption(
+                normalized_query
+            ):
                 if current_task and not current_task.done():
                     current_task.cancel()
                     with suppress(asyncio.CancelledError):
@@ -177,7 +161,6 @@ async def ws_stream(websocket: WebSocket) -> None:
                 )
                 current_task = None
                 continue
-
             if not normalized_query:
                 await _send_json(
                     websocket,
@@ -187,10 +170,8 @@ async def ws_stream(websocket: WebSocket) -> None:
                     },
                 )
                 continue
-
             pipeline = websocket.app.state.pipeline
             tier = pipeline.classify(normalized_query)
-
             if current_task and not current_task.done():
                 current_task.cancel()
                 with suppress(asyncio.CancelledError):
@@ -202,7 +183,6 @@ async def ws_stream(websocket: WebSocket) -> None:
                         "message": friday_personality.stopping_response(),
                     },
                 )
-
             await _send_json(
                 websocket,
                 {
@@ -212,7 +192,6 @@ async def ws_stream(websocket: WebSocket) -> None:
                     "intent": tier,
                 },
             )
-
             current_task = asyncio.create_task(
                 _handle_query(
                     websocket,
@@ -221,13 +200,10 @@ async def ws_stream(websocket: WebSocket) -> None:
                     tier=tier,
                 )
             )
-            
-            # Start news streamer for news intent
-            if intent.kind == "news":
+            if tier == "tier_2_standard":
                 asyncio.create_task(_news_streamer(websocket, normalized_query))
-
     except WebSocketDisconnect:
-        logger.info("WebSocket client disconnected: /ws/stream")
+        logger.info("WebSocket client connected: /ws/stream")
     except Exception as exc:
         logger.error("WebSocket error: %s", exc, exc_info=True)
     finally:
@@ -239,34 +215,36 @@ async def ws_stream(websocket: WebSocket) -> None:
 
 @ws_router.websocket("/ws/voice")
 async def ws_voice(websocket: WebSocket) -> None:
-    """Voice endpoint kept for raw-audio clients."""
     await websocket.accept()
     logger.info("WebSocket client connected: /ws/voice")
     buffered_chunks: list[bytes] = []
-
     try:
         while True:
             message = await websocket.receive()
             audio_bytes = message.get("bytes")
             text_payload = message.get("text")
-
             if text_payload:
                 try:
                     control = json.loads(text_payload)
                 except json.JSONDecodeError:
                     control = {}
-
                 event_type = control.get("type")
                 if event_type == "voice_start":
                     buffered_chunks.clear()
-                    await _send_progress(websocket, "transcribing", 10, "Voice stream started...")
+                    await _send_progress(
+                        websocket, "transcribing", 10, "Voice stream started..."
+                    )
                     continue
                 if event_type == "voice_chunk":
                     chunk_text = control.get("audio")
                     if isinstance(chunk_text, str):
-                        buffered_chunks.append(chunk_text.encode("latin1", errors="ignore"))
-                        if len(buffered_chunks) % 5 == 0: # Transcribe every 5 chunks for smoothness
-                            partial = await stt_service.transcribe_stream(buffered_chunks)
+                        buffered_chunks.append(
+                            chunk_text.encode("latin1", errors="ignore")
+                        )
+                        if len(buffered_chunks) % 5 == 0:
+                            partial = await stt_service.transcribe_stream(
+                                buffered_chunks
+                            )
                             if partial:
                                 await _send_json(
                                     websocket,
@@ -279,10 +257,8 @@ async def ws_voice(websocket: WebSocket) -> None:
                 elif event_type == "ping":
                     await _send_json(websocket, {"status": "pong"})
                     continue
-
             if not audio_bytes:
                 continue
-
             await _send_progress(websocket, "transcribing", 20, "Listening...")
             text = await stt_service.transcribe(audio_bytes)
             if not text:
@@ -294,7 +270,7 @@ async def ws_voice(websocket: WebSocket) -> None:
                     },
                 )
                 continue
-
+            pipeline = websocket.app.state.pipeline
             tier = pipeline.classify(text)
             await _send_json(
                 websocket,
@@ -306,22 +282,15 @@ async def ws_voice(websocket: WebSocket) -> None:
                     "transcription": text,
                 },
             )
-
-            # Execute via pipeline in voice mode
-            pipeline = websocket.app.state.pipeline
             response = await pipeline.run(text, voice_mode=True)
             summary = response.get("response", "Ready, Boss.")
-            
             await _send_json(
                 websocket,
                 {"status": "response_ready", "text": summary},
             )
             await _send_progress(websocket, "speaking", 85, "Talking back...")
-            
-            # Stream audio back to client
             async for chunk in tts_service.stream_audio(summary):
                 await websocket.send_bytes(chunk)
-
             await _send_json(
                 websocket,
                 {
@@ -332,7 +301,6 @@ async def ws_voice(websocket: WebSocket) -> None:
                     "transcription": text,
                 },
             )
-
     except WebSocketDisconnect:
         logger.info("WebSocket client disconnected: /ws/voice")
     except Exception as exc:
