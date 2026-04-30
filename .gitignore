@@ -34,6 +34,7 @@ friday/frontend/dist/
 .qoder/
 .qwen/
 .vibe/
+skills/
 
 # Docker and containerization
 .dockerignore
@@ -44,6 +45,7 @@ friday/frontend/dist/
 *.db
 *.sqlite
 .veritas_llm_cache.db
+friday/logs/
 
 # Testing caches
 .pytest_cache/
