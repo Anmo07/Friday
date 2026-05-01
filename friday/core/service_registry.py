@@ -23,21 +23,23 @@ class ServiceRegistry:
         checks = [
             self.check_ollama(),
             self.check_port("neo4j", 7687),
-            self.check_port("chromadb", 8000),
+            self.check_chroma(),
             self.check_port("redis", 6379)
         ]
         await asyncio.gather(*checks)
         
-        # If any core service is down, enable Limited Mode
+        # If Ollama is down, enable Limited Mode (Critical)
         if not self.services["ollama"]:
             self.limited_mode = True
             logger.warning("Ollama is DOWN. Friday will run in CRITICAL LIMITED MODE.")
-        elif not all(self.services.values()):
-            self.limited_mode = True
-            logger.info("Some services are down. Friday is running in Limited Mode.")
         else:
             self.limited_mode = False
-            logger.info("All services are healthy.")
+            # Check for other services just for reporting
+            down_services = [s for s, h in self.services.items() if not h and s != "ollama"]
+            if down_services:
+                logger.info(f"Secondary services ({', '.join(down_services)}) are offline. Using local embedded defaults.")
+            else:
+                logger.info("All services are healthy.")
 
     async def check_ollama(self) -> bool:
         try:
@@ -48,6 +50,15 @@ class ServiceRegistry:
         except Exception:
             self.services["ollama"] = False
         return self.services["ollama"]
+
+    async def check_chroma(self) -> bool:
+        try:
+            import chromadb
+            # If we can import it, the embedded client will work
+            self.services["chromadb"] = True
+        except ImportError:
+            self.services["chromadb"] = False
+        return self.services["chromadb"]
 
     async def check_port(self, service_name: str, port: int, host: str = "localhost") -> bool:
         try:
