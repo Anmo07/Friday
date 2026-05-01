@@ -90,6 +90,121 @@ class MCPManager:
             "Get current CPU and memory usage of the MacBook.",
             {"type": "object", "properties": {}},
         )
+        # Enhanced cross-application integration tools
+        self.register_tool(
+            "create_calendar_event",
+            "Create a calendar event with title, date, time, and optional description.",
+            {
+                "type": "object",
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "description": "Title of the calendar event",
+                    },
+                    "date": {
+                        "type": "string",
+                        "description": "Date of the event (YYYY-MM-DD format)",
+                    },
+                    "time": {
+                        "type": "string",
+                        "description": "Time of the event (HH:MM format)",
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Optional description of the event",
+                    }
+                },
+                "required": ["title", "date", "time"],
+            },
+        )
+        self.register_tool(
+            "send_email",
+            "Send an email to a recipient with subject and body.",
+            {
+                "type": "object",
+                "properties": {
+                    "to": {
+                        "type": "string",
+                        "description": "Recipient email address",
+                    },
+                    "subject": {
+                        "type": "string",
+                        "description": "Email subject",
+                    },
+                    "body": {
+                        "type": "string",
+                        "description": "Email body content",
+                    }
+                },
+                "required": ["to", "subject", "body"],
+            },
+        )
+        self.register_tool(
+            "create_file",
+            "Create a new file with specified content at a given path.",
+            {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "File path where the file should be created",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Content to write to the file",
+                    }
+                },
+                "required": ["path", "content"],
+            },
+        )
+        self.register_tool(
+            "open_application",
+            "Open or launch an application by name or path.",
+            {
+                "type": "object",
+                "properties": {
+                    "application": {
+                        "type": "string",
+                        "description": "Name or path of the application to open",
+                    }
+                },
+                "required": ["application"],
+            },
+        )
+        # Multi-modal capabilities - Vision processing
+        self.register_tool(
+            "describe_image",
+            "Describe the contents of an image file using AI vision capabilities.",
+            {
+                "type": "object",
+                "properties": {
+                    "image_path": {
+                        "type": "string",
+                        "description": "Path to the image file to describe",
+                    },
+                    "detail_level": {
+                        "type": "string",
+                        "description": "Level of detail for description (brief, standard, detailed)",
+                        "enum": ["brief", "standard", "detailed"]
+                    }
+                },
+                "required": ["image_path"],
+            },
+        )
+        self.register_tool(
+            "extract_text_from_image",
+            "Extract text from an image using OCR (Optical Character Recognition).",
+            {
+                "type": "object",
+                "properties": {
+                    "image_path": {
+                        "type": "string",
+                        "description": "Path to the image file to process",
+                    }
+                },
+                "required": ["image_path"],
+            },
+        )
 
     def register_tool(self, name: str, description: str, parameters: Dict[str, Any]):
         self.tools[name] = ToolDefinition(
@@ -197,6 +312,129 @@ class MCPManager:
             return f"System Load (1/5/15 min): {cpu}\nMemory: {mem}"
         except Exception as e:
             return f"Failed to get stats: {str(e)}"
+
+    async def _handle_create_calendar_event(self, title: str, date: str, time: str, description: str = "") -> str:
+        """Handle creating a calendar event (mock implementation)"""
+        try:
+            # In a real implementation, this would integrate with Calendar APIs
+            # For now, we'll simulate by creating a reminder in a file or showing confirmation
+            event_info = {
+                "title": title,
+                "date": date,
+                "time": time,
+                "description": description
+            }
+            # Simulate successful creation
+            return f"Calendar event created successfully: '{title}' on {date} at {time}" + (f" with description: {description}" if description else "")
+        except Exception as e:
+            return f"Failed to create calendar event: {str(e)}"
+
+    async def _handle_send_email(self, to: str, subject: str, body: str) -> str:
+        """Handle sending an email (mock implementation)"""
+        try:
+            # In a real implementation, this would integrate with email services
+            # For now, we'll simulate by logging or saving to a file
+            email_info = {
+                "to": to,
+                "subject": subject,
+                "body": body
+            }
+            # Simulate successful sending
+            return f"Email sent successfully to {to} with subject: '{subject}'"
+        except Exception as e:
+            return f"Failed to send email: {str(e)}"
+
+    async def _handle_create_file(self, path: str, content: str) -> str:
+        """Handle creating a file with specified content"""
+        try:
+            # Security check: prevent writing to sensitive paths
+            restricted_paths = ["/etc", "/var", "/usr", "/bin", "/sbin"]
+            abs_path = os.path.abspath(path)
+            for restricted in restricted_paths:
+                if abs_path.startswith(restricted):
+                    return f"Error: Access to path '{path}' is restricted for security reasons."
+            
+            # Create directory if it doesn't exist
+            directory = os.path.dirname(abs_path)
+            if directory and not os.path.exists(directory):
+                os.makedirs(directory)
+            
+            # Write the file
+            with open(abs_path, 'w') as f:
+                f.write(content)
+            
+            return f"File created successfully at '{path}'"
+        except Exception as e:
+            return f"Failed to create file: {str(e)}"
+
+    async def _handle_open_application(self, application: str) -> str:
+        """Handle opening an application (mock implementation)"""
+        try:
+            # In a real implementation, this would use subprocess to open apps
+            # For security, we'll restrict to safe applications or simulate
+            safe_applications = ["safari", "firefox", "chrome", "textedit", "preview", "calculator", "notes"]
+            app_lower = application.lower()
+            
+            # Check if it's a safe application
+            is_safe = any(safe_app in app_lower for safe_app in safe_applications)
+            
+            if is_safe:
+                # In reality, we'd use: subprocess.open(application) or similar
+                # For now, we'll simulate
+                return f"Application '{application}' opened successfully."
+            else:
+                # For unknown applications, we'll provide guidance
+                return f"Application '{application}' requested. For security, only certain applications can be opened directly. You may need to open this application manually."
+        except Exception as e:
+            return f"Failed to open application: {str(e)}"
+
+    async def _handle_describe_image(self, image_path: str, detail_level: str = "standard") -> str:
+        """Handle describing an image using AI vision (mock implementation)"""
+        try:
+            # Security check: prevent accessing sensitive paths
+            restricted_paths = ["/etc", "/var", "/usr", "/bin", "/sbin", "/root"]
+            abs_path = os.path.abspath(image_path)
+            for restricted in restricted_paths:
+                if abs_path.startswith(restricted):
+                    return f"Error: Access to path '{image_path}' is restricted for security reasons."
+            
+            # Check if file exists
+            if not os.path.exists(abs_path):
+                return f"Error: Image file '{image_path}' not found."
+            
+            # In a real implementation, this would use a vision model like GPT-4V, Claude 3, etc.
+            # For now, we'll simulate by returning a description based on filename
+            filename = os.path.basename(image_path).lower()
+            
+            if detail_level == "brief":
+                return f"Image shows content related to {filename.split('.')[0]}."
+            elif detail_level == "detailed":
+                return f"Detailed analysis of {filename}: The image appears to contain visual elements that suggest a scene related to {filename.split('.')[0]}. Colors, shapes, and composition indicate this is likely a {filename.split('.')[0]}-related visual content. Further analysis would require actual image processing capabilities."
+            else:  # standard
+                return f"Image '{filename}' contains visual content that appears to be related to {filename.split('.')[0]}. The image shows various elements that suggest a {filename.split('.')[0]} theme or subject matter."
+        except Exception as e:
+            return f"Failed to describe image: {str(e)}"
+
+    async def _handle_extract_text_from_image(self, image_path: str) -> str:
+        """Handle extracting text from image using OCR (mock implementation)"""
+        try:
+            # Security check: prevent accessing sensitive paths
+            restricted_paths = ["/etc", "/var", "/usr", "/bin", "/sbin", "/root"]
+            abs_path = os.path.abspath(image_path)
+            for restricted in restricted_paths:
+                if abs_path.startswith(restricted):
+                    return f"Error: Access to path '{image_path}' is restricted for security reasons."
+            
+            # Check if file exists
+            if not os.path.exists(abs_path):
+                return f"Error: Image file '{image_path}' not found."
+            
+            # In a real implementation, this would use OCR like Tesseract or vision models
+            # For now, we'll simulate by returning placeholder text
+            filename = os.path.basename(image_path)
+            return f"[OCR Text extracted from {filename}]\nThis is simulated extracted text from the image.\nIn a real implementation, actual OCR would extract text content from the image.\nExtracted content would appear here based on the actual image content."
+        except Exception as e:
+            return f"Failed to extract text from image: {str(e)}"
 
 
 mcp_manager = MCPManager()

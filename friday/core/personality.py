@@ -1,7 +1,8 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Iterable
+from typing import Iterable, Dict, Any, Optional
+import re
 
 INTERRUPTION_PHRASES = (
     "stop",
@@ -17,6 +18,16 @@ FILLER_PHRASES = (
     "Well",
     "So",
 )
+
+# Emotional intelligence enhancements
+EMOTION_KEYWORDS = {
+    "frustrated": ["frustrated", "annoyed", "angry", "upset", "irritated"],
+    "confused": ["confused", "don't understand", "unclear", "lost", "puzzled"],
+    "excited": ["excited", "happy", "great", "awesome", "fantastic", "wonderful"],
+    "sad": ["sad", "unhappy", "depressed", "down", "miserable"],
+    "grateful": ["thank", "thanks", "grateful", "appreciate"],
+    "urgent": ["urgent", "asap", "quickly", "hurry", "emergency", "important"]
+}
 
 
 @dataclass(frozen=True)
@@ -131,6 +142,43 @@ class FridayPersonality:
                 first_sentence if first_sentence.endswith(".") else f"{first_sentence}."
             )
         return cleaned
+
+    @staticmethod
+    def detect_emotion(text: str) -> Optional[str]:
+        """Detect emotion from text content"""
+        if not text:
+            return None
+            
+        text_lower = text.lower()
+        
+        # Check for each emotion category
+        for emotion, keywords in EMOTION_KEYWORDS.items():
+            for keyword in keywords:
+                if keyword in text_lower:
+                    return emotion
+        return None
+
+    @staticmethod
+    def adapt_response_for_emotion(response: str, emotion: Optional[str]) -> str:
+        """Adapt response based on detected emotion"""
+        if not emotion:
+            return response
+            
+        # Emotion-specific adaptations
+        emotion_adaptations = {
+            "frustrated": "I understand this might be frustrating, Boss. Let me try to help clarify things for you.",
+            "confused": "No worries, Boss. Let me break this down in a simpler way for you.",
+            "excited": "That's great to hear, Boss! Your enthusiasm is contagious!",
+            "sad": "I'm here for you, Boss. Let's see if we can work through this together.",
+            "grateful": "You're very welcome, Boss. Happy to be of assistance!",
+            "urgent": "I understand this is urgent, Boss. Let me prioritize this and get you an answer quickly."
+        }
+        
+        # If we have a specific adaptation for this emotion, prepend it
+        if emotion in emotion_adaptations:
+            return f"{emotion_adaptations[emotion]} {response}"
+        
+        return response
 
     @staticmethod
     def build_news_summary(topic: str, headlines: Iterable[str]) -> str:

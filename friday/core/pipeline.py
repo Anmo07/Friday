@@ -11,6 +11,7 @@ from core.vector_client import ChromaClient
 from core.graph_client import Neo4jClient
 from core.truth_engine import TruthEngine
 from core.firewall import HallucinationFirewall
+from core.personality import friday_personality
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,9 @@ class FridayPipeline:
             "context_summary": "",       # Summary of ongoing context
             "last_updated": datetime.now(),
             "personalization_data": {},  # Learned user patterns
-            "max_history_length": 50     # Keep last 50 exchanges
+            "max_history_length": 50,    # Keep last 50 exchanges
+            "predictive_suggestions": [], # Proactive suggestions based on context
+            "last_intent": None          # Last detected intent from user query
         }
         logger.info(f"FridayPipeline initialized in {time.monotonic() - t0:.2f}s")
 
@@ -48,6 +51,11 @@ class FridayPipeline:
             "voice_mode": False  # Will be updated if needed
         }
         
+        # Detect intent from query
+        intent = self._detect_intent(query)
+        exchange["intent"] = intent
+        self.memory["last_intent"] = intent
+        
         # Add to history
         self.memory["conversation_history"].append(exchange)
         
@@ -58,15 +66,56 @@ class FridayPipeline:
         # Update last updated timestamp
         self.memory["last_updated"] = datetime.now()
         
-        # Update context summary periodically
+        # Update context summary and predictive suggestions periodically
         if len(self.memory["conversation_history"]) % 5 == 0:  # Every 5 exchanges
             self._update_context_summary()
+
+    def _detect_intent(self, query: str) -> str:
+        """Detect user intent from query using rule-based classification"""
+        query_lower = query.lower().strip()
+        
+        # Check for exact matches and phrases first (more specific)
+        # Use word boundaries to avoid false positives
+        words = query_lower.split()
+        
+        # Greeting detection
+        if any(word in ["hello", "hi", "hey"] for word in words) or \
+           any(phrase in query_lower for phrase in ["good morning", "good afternoon", "good evening"]):
+            return "greeting"
+        # Farewell detection
+        if any(word in ["bye", "goodbye"] for word in words) or \
+           any(phrase in query_lower for phrase in ["see you", "talk later"]):
+            return "farewell"
+        # Appreciation detection
+        if any(word in ["thanks", "thankyou", "thank"] for word in words) or \
+           any(phrase in query_lower for phrase in ["thank you", "appreciate", "great", "awesome", "good job"]):
+            return "appreciation"
+        # Complaint detection
+        if any(phrase in query_lower for phrase in ["not working", "broken", "doesn't work", "issue", "problem", "error"]):
+            return "complaint"
+        
+        # Check for specific intent patterns - ORDER MATTERS: more specific first
+        if any(phrase in query_lower for phrase in ["verify", "fact check", "check", "confirm", "validate", "is it true", "is this correct"]):
+            return "verification_request"
+        if any(phrase in query_lower for phrase in ["what is", "what are", "who is", "who are", "when is", "where is", "explain", "tell me about", "tell me", "tell me a"]):
+            return "information_request"
+        if any(phrase in query_lower for phrase in ["open", "launch", "start", "run", "execute", "create", "make", "set", "turn on", "turn off"]):
+            return "action_request"
+        if any(phrase in query_lower for phrase in ["please", "could you", "would you", "can you"]):
+            return "command"
+        # Check for question indicators AFTER specific patterns to avoid conflicts
+        if "?" in query or any(word in query_lower for word in ["how", "what", "who", "when", "where", "why"]):
+            return "question"
+        
+        # Default intent
+        return "general_query"
 
     def _update_context_summary(self):
         """Generate a summary of recent conversation context"""
         recent_exchanges = self.memory["conversation_history"][-5:]  # Last 5 exchanges
         if not recent_exchanges:
             self.memory["context_summary"] = ""
+            self.memory["predictive_suggestions"] = []
             return
             
         # Simple summarization - in production would use LLM
@@ -80,6 +129,51 @@ class FridayPipeline:
         # Create summary
         unique_topics = list(set(topics))[:10]  # Limit to 10 unique topics
         self.memory["context_summary"] = f"Recent topics: {', '.join(unique_topics)}" if unique_topics else ""
+        
+        # Generate predictive suggestions based on context
+        self._generate_predictive_suggestions()
+
+    def _generate_predictive_suggestions(self):
+        """Generate proactive suggestions based on conversation context"""
+        suggestions = []
+        
+        # Get recent topics from context summary
+        if not self.memory["context_summary"]:
+            self.memory["predictive_suggestions"] = []
+            return
+            
+        # Extract topics from context summary
+        context_lower = self.memory["context_summary"].lower()
+        
+        # Define suggestion patterns based on topics
+        suggestion_patterns = {
+            "weather": ["Would you like me to check the forecast for tomorrow?", "Should I set a weather alert for severe conditions?"],
+            "time": ["Would you like me to set a reminder or alarm?", "Should I check your calendar for upcoming events?"],
+            "news": ["Would you like me to fact-check any recent headlines you've seen?", "Should I look for updates on this developing story?"],
+            "tech": ["Would you like me to help troubleshoot any technical issues?", "Should I check for software updates on your devices?"],
+            "health": ["Would you like me to look up health information or symptoms?", "Should I help you find nearby medical facilities?"],
+            "food": ["Would you like me to find recipes or restaurant recommendations?", "Should I help you plan a grocery list?"],
+            "travel": ["Would you like me to check flight prices or hotel availability?", "Should I help you create an itinerary?"],
+            "finance": ["Would you like me to check stock prices or help with budgeting?", "Should I look up current exchange rates?"],
+            "sports": ["Would you like me to check game scores or schedules?", "Should I look up player statistics?"],
+            "entertainment": ["Would you like me to find movie showtimes or streaming recommendations?", "Should I look up concert tickets?"]
+        }
+        
+        # Check for matching topics and add relevant suggestions
+        for topic, topic_suggestions in suggestion_patterns.items():
+            if topic in context_lower:
+                suggestions.extend(topic_suggestions[:1])  # Add one suggestion per matching topic
+                
+        # Limit to max 3 suggestions
+        self.memory["predictive_suggestions"] = suggestions[:3]
+        
+        # If no specific matches, add general helpful suggestions
+        if not suggestions:
+            self.memory["predictive_suggestions"] = [
+                "Is there anything specific you'd like help with today?",
+                "Would you like me to explain anything in more detail?",
+                "Do you need assistance with any tasks or decisions?"
+            ][:2]
 
     def _get_conversation_context(self) -> str:
         """Get formatted conversation context for LLM prompts"""
@@ -434,13 +528,21 @@ class FridayPipeline:
         )
         llm = self._get_llm("phi3:mini", temperature=0.0)
         
+        # Detect intent for better response customization
+        intent = self._detect_intent(query)
+        
         # Add conversation context if available
         context_prompt = ""
         if self.memory["conversation_history"]:
             context_prompt = f"Previous conversation context:\n{self._get_conversation_context()}\n\n"
         
+        # Add intent awareness
+        intent_context = ""
+        if intent != "general_query":
+            intent_context = f"User intent detected: {intent}. Tailor your response accordingly.\n"
+        
         return await llm.ainvoke(
-            f"You are Friday. {context_prompt}{instruction}\nQuery: {query}"
+            f"You are Friday. {intent_context}{context_prompt}{instruction}\nQuery: {query}"
         )
 
     async def _run_standard_agent(
@@ -451,13 +553,21 @@ class FridayPipeline:
         )
         llm = self._get_llm("llama3.1:8b-instruct", temperature=0.0)
         
+        # Detect intent for better response customization
+        intent = self._detect_intent(query)
+        
         # Add conversation context if available
         conversation_context = ""
         if self.memory["conversation_history"]:
             conversation_context = f"Previous conversation context:\n{self._get_conversation_context()}\n\n"
         
+        # Add intent awareness
+        intent_context = ""
+        if intent != "general_query":
+            intent_context = f"User intent detected: {intent}. Tailor your response accordingly.\n"
+        
         return await llm.ainvoke(
-            f"You are Friday. {conversation_context}{instruction} based on context.\nContext: {context}\nQuery: {query}"
+            f"You are Friday. {intent_context}{conversation_context}{instruction} based on context.\nContext: {context}\nQuery: {query}"
         )
 
     async def _run_reasoning_agent(
@@ -477,10 +587,30 @@ class FridayPipeline:
         proactive_context = ""
         if self.memory["context_summary"]:
             proactive_context = f"Context awareness: {self.memory['context_summary']}\n"
+            
+        # Add proactive suggestions if available
+        suggestions_context = ""
+        if self.memory.get("predictive_suggestions"):
+            suggestions_list = "\n".join([f"- {suggestion}" for suggestion in self.memory["predictive_suggestions"]])
+            suggestions_context = f"Proactive suggestions based on our conversation:\n{suggestions_list}\n\n"
         
-        return await llm.ainvoke(
-            f"You are Friday. {proactive_context}{conversation_context}{instruction}\nContext: {context}\nQuery: {query}"
+        # Detect emotion in query for emotional intelligence
+        emotion = friday_personality.detect_emotion(query)
+        emotion_context = ""
+        if emotion:
+            emotion_context = f"Detected user emotion: {emotion}. Respond with appropriate empathy and tone.\n"
+        
+        # Get base response from LLM
+        base_response = await llm.ainvoke(
+            f"You are Friday. {emotion_context}{proactive_context}{conversation_context}{suggestions_context}{instruction}\nContext: {context}\nQuery: {query}"
         )
+        
+        # Adapt response based on detected emotion
+        if emotion:
+            adapted_response = friday_personality.adapt_response_for_emotion(base_response, emotion)
+            return adapted_response
+        
+        return base_response
 
     async def _run_verification_agent(self, draft: str, context: Any) -> str:
         llm = self._get_llm("llama3.1:8b-instruct", temperature=0.0)
