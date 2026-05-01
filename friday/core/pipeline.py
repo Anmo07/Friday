@@ -15,6 +15,7 @@ from core.graph_client import Neo4jClient
 from core.truth_engine import TruthEngine
 from core.firewall import HallucinationFirewall
 from core.personality import friday_personality
+from core.service_registry import service_registry
 
 logger = logging.getLogger(__name__)
 
@@ -440,6 +441,11 @@ class FridayPipeline:
         voice_instructions = ""
         if voice_mode:
             voice_instructions = "SYSTEM: You are Friday. Priority: Brevity. Response must be <20 words. Use conversational prosody (um, well, actually). No markdown. No lists. Maintain a premium, helpful tone.\n"
+        
+        if service_registry.limited_mode:
+            warning = " [LIMITED MODE ACTIVE] "
+            yield self._sse_event("token", {"t": f"{warning}\n"})
+            
         if tier == "tier_1_fast":
             prompt = f"{voice_instructions}You are Friday, a fast local OS agent. Execute and confirm.\nQuery: {query}"
             model = (
