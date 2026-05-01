@@ -5,7 +5,10 @@ import time
 from typing import Any, AsyncGenerator, Dict, Tuple, List, Optional
 import requests
 from datetime import datetime
-from semantic_router import Route, RouteLayer
+try:
+    from semantic_router import Route, SemanticRouter as RouteLayer
+except ImportError:
+    from semantic_router import Route, RouteLayer
 from semantic_router.encoders import HuggingFaceEncoder
 from core.vector_client import ChromaClient
 from core.graph_client import Neo4jClient
@@ -40,6 +43,19 @@ class FridayPipeline:
             "last_intent": None          # Last detected intent from user query
         }
         logger.info(f"FridayPipeline initialized in {time.monotonic() - t0:.2f}s")
+
+    def reset_memory(self):
+        """Reset conversation memory to initial state"""
+        self.memory.update({
+            "conversation_history": [],
+            "user_preferences": {},
+            "context_summary": "",
+            "last_updated": datetime.now(),
+            "personalization_data": {},
+            "predictive_suggestions": [],
+            "last_intent": None
+        })
+        logger.info("FridayPipeline memory reset.")
 
     def _update_conversation_memory(self, query: str, response: str, tier: str):
         """Update conversation memory with new exchange"""
@@ -250,9 +266,32 @@ class FridayPipeline:
                 "verify the accuracy of this scientific paper's conclusions",
             ],
         )
-        return RouteLayer(
+        rl = RouteLayer(
             encoder=self.encoder, routes=[fast_route, standard_route, deep_route]
         )
+        
+        # In some versions of semantic-router (e.g. 0.1.12), fit() might fail if the index isn't ready.
+        # The constructor above usually builds the index, but fit() can still be problematic.
+        try:
+            # Only attempt fit if utterances are provided and fit method exists
+            utterances = []
+            labels = []
+            for route in [fast_route, standard_route, deep_route]:
+                for utterance in route.utterances:
+                    utterances.append(utterance)
+                    labels.append(route.name)
+            
+            if hasattr(rl, "fit"):
+                # fit() is used for threshold optimization, not for adding data.
+                # If it fails, we can still use the router with default thresholds.
+                try:
+                    rl.fit(utterances, labels)
+                except Exception as fit_err:
+                    logger.warning(f"Semantic router fit() failed: {fit_err}. Using default thresholds.")
+        except Exception as e:
+            logger.warning(f"Semantic router initialization warning: {e}")
+            
+        return rl
 
     _DEEP_KEYWORDS = {
         "investigate",
@@ -286,8 +325,14 @@ class FridayPipeline:
     }
 
     def classify(self, query: str) -> str:
-        route = self.router(query)
-        semantic_tier = route.name if route.name else "tier_2_standard"
+        try:
+            route = self.router(query)
+            semantic_tier = route.name if route.name else "tier_2_standard"
+        except Exception as e:
+            # Fallback if the router fails (e.g. "Index is not ready")
+            logger.error(f"Semantic router classification failed: {e}. Falling back to keyword boosting.")
+            semantic_tier = "tier_2_standard"
+        
         return self._boost_tier(query, semantic_tier)
 
     def _boost_tier(self, query: str, semantic_tier: str) -> str:

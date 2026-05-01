@@ -203,7 +203,7 @@ async def ws_stream(websocket: WebSocket) -> None:
             if tier == "tier_2_standard":
                 asyncio.create_task(_news_streamer(websocket, normalized_query))
     except WebSocketDisconnect:
-        logger.info("WebSocket client connected: /ws/stream")
+        logger.info("WebSocket client disconnected: /ws/stream")
     except Exception as exc:
         logger.error("WebSocket error: %s", exc, exc_info=True)
     finally:

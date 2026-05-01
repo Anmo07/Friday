@@ -174,7 +174,7 @@ class FridayMenuApp(rumps.App):
             print("FRIDAY: Listening paused.")
 
     def clear_memory(self, _):
-        self.layer.memory.clear()
+        self.layer.reset_memory()
         rumps.notification(
             "FRIDAY", "Memory Cleared", "Conversation context has been reset."
         )

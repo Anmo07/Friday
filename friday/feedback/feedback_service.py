@@ -13,7 +13,7 @@ DB_PATH = os.path.join(DB_DIR, "feedback_loop.sqlite")
 
 class UserFeedback(BaseModel):
     query: str
-    original_truth_score: float
+    original_truth_score: float = 0.0
     user_flag: Literal["correct", "incorrect", "bias_disagreement"]
     user_corrected_score: Optional[float] = None
     comments: str = ""
@@ -22,7 +22,7 @@ class UserFeedback(BaseModel):
     @classmethod
     def normalize_scores(cls, value: Optional[float]) -> Optional[float]:
         if value is None or value == "":
-            return None
+            return 0.0
         numeric_value = float(value)
         if 1.0 < numeric_value <= 100.0:
             numeric_value = numeric_value / 100.0
