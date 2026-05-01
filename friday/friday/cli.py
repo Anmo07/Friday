@@ -14,9 +14,26 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
+os.environ["TRANSFORMERS_VERBOSITY"] = "error"
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+
+import logging
+logging.getLogger("semantic_router").setLevel(logging.ERROR)
+logging.getLogger("transformers").setLevel(logging.ERROR)
+logging.getLogger("urllib3").setLevel(logging.ERROR)
+
 warnings.filterwarnings("ignore", category=UserWarning, module="langchain_core")
 warnings.filterwarnings("ignore", category=UserWarning, module="pydantic")
 warnings.filterwarnings("ignore")
+
+from rich.console import Console
+from rich.panel import Panel
+from rich.markdown import Markdown
+from rich.live import Live
+from rich.text import Text
+
+console = Console()
+
 from core.pipeline import FridayPipeline
 
 
@@ -64,34 +81,59 @@ class FridayMenuApp(rumps.App):
 
     def start_background_loop(self):
         try:
-            print("Initializing FRIDAY...")
-            asyncio.set_event_loop(self.loop)
-            print("\nHello Boss. FRIDAY online. I'm listening...")
-            print("(You can speak or type your commands here)\n")
+            with console.status("[bold cyan]Initializing FRIDAY...", spinner="dots"):
+                asyncio.set_event_loop(self.loop)
+                # Force pipeline load to happen inside status
+                _ = self.layer
+            
+            console.clear()
+            console.print(Panel.fit(
+                "[bold blue]FRIDAY ONLINE[/bold blue]\n[dim]High-Performance Assistant Engine v0.1.4[/dim]",
+                border_style="cyan"
+            ))
+            console.print("[dim]Type [bold white]/help[/bold white] for commands or just start talking.[/dim]\n")
+            
             loop_thread = threading.Thread(target=self._run_async_loop)
             loop_thread.daemon = True
             loop_thread.start()
+            
             terminal_thread = threading.Thread(target=self.terminal_loop)
             terminal_thread.daemon = True
             terminal_thread.start()
+            
             self.listen_loop()
         except Exception as e:
-            print(f"\n[Startup Error]: {e}")
+            console.print(f"[bold red]Startup Error:[/bold red] {e}")
 
     def terminal_loop(self):
         while True:
             try:
-                user_input = input("")
+                user_input = console.input("[bold purple]user[/bold purple] [dim]> [/dim]")
                 if not user_input.strip():
                     continue
-                if user_input.strip().lower() in ["exit", "quit", "stop"]:
-                    print("FRIDAY: Shutting down. Goodbye Boss.")
+                
+                cmd = user_input.strip().lower()
+                if cmd in ["exit", "quit", "stop"]:
+                    console.print("[italic yellow]FRIDAY: Shutting down. Goodbye Boss.[/italic yellow]")
                     rumps.quit_application()
                     break
-                print(f"You (text): {user_input}")
+                
+                if cmd == "/help":
+                    self.show_help()
+                    continue
+
+                if cmd == "/clear":
+                    console.clear()
+                    continue
+
+                if cmd == "/reset":
+                    self.clear_memory(None)
+                    continue
+
                 # Cancel previous task if a new one starts
                 if self.current_task:
                     self.current_task.cancel()
+                
                 self.current_task = asyncio.run_coroutine_threadsafe(
                     self.process_text(user_input), self.loop
                 )
@@ -99,7 +141,24 @@ class FridayMenuApp(rumps.App):
                 rumps.quit_application()
                 break
             except Exception as e:
-                print(f"Terminal Input Error: {e}")
+                console.print(f"[bold red]Terminal Input Error:[/bold red] {e}")
+
+    def show_help(self):
+        help_text = """
+### Available Commands
+- **Text Input**: Just type normally to talk to FRIDAY.
+- **Voice Input**: Speak anytime (microphone is active).
+- `/help`: Show this help message.
+- `/clear`: Clear the terminal screen.
+- `/reset`: Clear conversation context memory.
+- `exit` / `quit`: Shut down FRIDAY.
+
+### Shortcuts
+- **Open Dashboard**: Use the menu bar icon.
+- **Toggle Mic**: Use 'Pause Listening' in menu bar.
+"""
+        console.print(Panel(Markdown(help_text), title="[bold cyan]FRIDAY Help[/bold cyan]", border_style="cyan"))
+
 
     def toggle_mic(self, sender):
         self.listening = not self.listening
@@ -119,7 +178,7 @@ class FridayMenuApp(rumps.App):
         rumps.notification(
             "FRIDAY", "Memory Cleared", "Conversation context has been reset."
         )
-        print("FRIDAY: Context memory cleared.")
+        console.print("[italic cyan]FRIDAY: Context memory cleared.[/italic cyan]")
 
     def open_dashboard(self, _):
         subprocess.Popen(["open", "http://localhost:3000/dashboard"])
@@ -142,22 +201,23 @@ class FridayMenuApp(rumps.App):
                     if not self.listening:
                         time.sleep(0.5)
                         continue
+                    
                     try:
                         audio = recognizer.listen(
                             source, timeout=None, phrase_time_limit=10
                         )
                         if not self.listening:
                             continue
-                        print("\n[Voice detected, transcribing...]", flush=True)
+                        
                         asyncio.run_coroutine_threadsafe(
                             self.process_audio(audio.get_wav_data()), self.loop
                         )
                     except sr.WaitTimeoutError:
                         pass
-                    except Exception as e:
-                        print(f"\n[STT Listen Error]: {e}")
+                    except Exception:
+                        pass
         except Exception as e:
-            print(f"\n[Microphone init failed]: {e}")
+            console.print(f"\n[bold red]Microphone init failed:[/bold red] {e}")
 
     async def process_text(self, text: str):
         try:
@@ -165,7 +225,6 @@ class FridayMenuApp(rumps.App):
 
             full_response = ""
             current_sentence = ""
-            print("FRIDAY:", end=" ", flush=True)
             audio_queue = asyncio.Queue()
 
             async def audio_worker():
@@ -191,28 +250,34 @@ class FridayMenuApp(rumps.App):
                     audio_queue.task_done()
 
             worker_task = asyncio.create_task(audio_worker())
-            async for chunk in self.layer.stream_run(text, voice_mode=True):
-                if chunk.startswith("event: token"):
-                    data = json.loads(chunk.split("data: ")[1])
-                    token = data.get("t", "")
-                    print(token, end="", flush=True)
-                    full_response += token
-                    current_sentence += token
-                if any(
-                    punct in current_sentence
-                    for punct in [". ", "! ", "? ", ".\n", "!\n", "?\n"]
-                ):
-                    for punct in [". ", "! ", "? ", ".\n", "!\n", "?\n"]:
-                        if punct in current_sentence:
-                            parts = current_sentence.split(punct, 1)
-                            sentence_to_speak = parts[0] + punct
-                            current_sentence = parts[1] if len(parts) > 1 else ""
-                            await audio_queue.put(sentence_to_speak)
-                            break
-                if chunk.startswith("event: truth_score"):
-                    data = json.loads(chunk.split("data: ")[1])
-                    print(f"\n[Truth Score: {data.get('truth_score')}]")
-            print()
+            
+            console.print("[bold cyan]friday[/bold cyan] [dim]> [/dim]", end="")
+            
+            with Live(Text(""), refresh_per_second=20, console=console) as live:
+                async for chunk in self.layer.stream_run(text, voice_mode=True):
+                    if chunk.startswith("event: token"):
+                        data = json.loads(chunk.split("data: ")[1])
+                        token = data.get("t", "")
+                        full_response += token
+                        current_sentence += token
+                        live.update(Text(full_response))
+                        
+                    if any(
+                        punct in current_sentence
+                        for punct in [". ", "! ", "? ", ".\n", "!\n", "?\n"]
+                    ):
+                        for punct in [". ", "! ", "? ", ".\n", "!\n", "?\n"]:
+                            if punct in current_sentence:
+                                parts = current_sentence.split(punct, 1)
+                                sentence_to_speak = parts[0] + punct
+                                current_sentence = parts[1] if len(parts) > 1 else ""
+                                await audio_queue.put(sentence_to_speak)
+                                break
+                    if chunk.startswith("event: truth_score"):
+                        data = json.loads(chunk.split("data: ")[1])
+                        # Truth score handled silently or added at end
+                
+            console.print() # New line after stream
             if current_sentence.strip():
                 await audio_queue.put(current_sentence)
             await audio_queue.put(None)
@@ -223,9 +288,9 @@ class FridayMenuApp(rumps.App):
                     self.current_proc.terminate()
                 except:
                     pass
-            print("\n[Interrupted]")
+            console.print("\n[italic yellow][Interrupted][/italic yellow]")
         except Exception as e:
-            print(f"\n[Error processing text]: {e}")
+            console.print(f"\n[bold red]Error processing text:[/bold red] {e}")
         finally:
             self.current_task = None
 
@@ -235,15 +300,15 @@ class FridayMenuApp(rumps.App):
             text = await stt_service.transcribe(audio_bytes)
 
             if not text or not text.strip():
-                print("[Transcription returned empty]")
                 return
-            print(f"You: {text}")
+            
+            console.print(f"[bold purple]user (voice)[/bold purple] [dim]> [/dim]{text}")
             
             # Handle interruption
             if text.strip().lower() in ["stop", "hold on", "quiet", "shut up"]:
                 if self.current_task:
                     self.current_task.cancel()
-                    print("FRIDAY: Stopping as requested.")
+                    console.print("[italic yellow]FRIDAY: Stopping as requested.[/italic yellow]")
                 return
 
             if text.strip().lower() in ["exit", "quit", "stop listening"]:
@@ -257,7 +322,7 @@ class FridayMenuApp(rumps.App):
             self.current_task = asyncio.create_task(self.process_text(text))
             await self.current_task
         except Exception as e:
-            print(f"\n[Error processing audio]: {e}")
+            console.print(f"\n[bold red]Error processing audio:[/bold red] {e}")
 
 
 def main():
