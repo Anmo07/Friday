@@ -32,13 +32,37 @@ def init_history_database() -> None:
                 owner_email TEXT NOT NULL DEFAULT 'public'
             )
         """)
-        try:
-            conn.execute(
-                "ALTER TABLE query_history ADD COLUMN owner_email TEXT NOT NULL DEFAULT 'public'"
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS session_memory (
+                owner_email TEXT PRIMARY KEY,
+                memory_json TEXT,
+                updated_at TEXT
             )
-        except sqlite3.OperationalError:
-            pass
+        """)
         conn.commit()
+
+
+def save_session_memory(owner_email: str, memory: dict) -> None:
+    import json
+    from datetime import datetime
+    with closing(_get_connection()) as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO session_memory (owner_email, memory_json, updated_at) VALUES (?, ?, ?)",
+            (owner_email, json.dumps(memory), datetime.now().isoformat())
+        )
+        conn.commit()
+
+
+def load_session_memory(owner_email: str) -> dict:
+    import json
+    with closing(_get_connection()) as conn:
+        row = conn.execute(
+            "SELECT memory_json FROM session_memory WHERE owner_email = ?",
+            (owner_email,)
+        ).fetchone()
+        if row:
+            return json.loads(row["memory_json"])
+    return {}
 
 
 def log_query_result(payload: QueryResponse, owner_email: str = "public") -> None:

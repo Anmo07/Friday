@@ -11,12 +11,14 @@ os.makedirs(DB_DIR, exist_ok=True)
 DB_PATH = os.path.join(DB_DIR, "feedback_loop.sqlite")
 
 
+from pydantic import BaseModel, Field, field_validator
+
 class UserFeedback(BaseModel):
-    query: str
+    query: str = Field(..., max_length=1000)
     original_truth_score: float = 0.0
     user_flag: Literal["correct", "incorrect", "bias_disagreement"]
     user_corrected_score: Optional[float] = None
-    comments: str = ""
+    comments: str = Field("", max_length=5000)
 
     @field_validator("original_truth_score", "user_corrected_score", mode="before")
     @classmethod

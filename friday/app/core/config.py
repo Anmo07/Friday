@@ -21,8 +21,13 @@ class Settings(BaseSettings):
     CACHE_MAX_ENTRIES: int = 512
     HISTORY_MAX_ITEMS: int = 100
     ALERTS_MAX_ITEMS: int = 100
-    ALLOW_ANONYMOUS_QUERY_ENDPOINT: bool = True
-    ALLOW_ANONYMOUS_WS: bool = True
+    ALLOW_ANONYMOUS_QUERY_ENDPOINT: bool = False
+    ALLOW_ANONYMOUS_WS: bool = False
+
+    # Privacy & Local-First Configuration
+    PRIVACY_MODE: bool = False  # If True, disable all cloud-dependent features
+    USE_LOCAL_TTS: bool = False # If True, use Piper instead of Edge-TTS
+
     PUBLIC_API_BASE_URL: str = "http://localhost:8001/api/v1"
     PUBLIC_WS_BASE_URL: str = "ws://localhost:8001/ws/stream"
     OLLAMA_BASE_URL: str = "http://localhost:11434"

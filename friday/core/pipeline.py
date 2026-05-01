@@ -16,14 +16,16 @@ from core.truth_engine import TruthEngine
 from core.firewall import HallucinationFirewall
 from core.personality import friday_personality
 from core.service_registry import service_registry
+from core.history_store import save_session_memory, load_session_memory
 
 logger = logging.getLogger(__name__)
 
 
 class FridayPipeline:
-    def __init__(self):
+    def __init__(self, owner_email: str = "public"):
         t0 = time.monotonic()
         from core.mcp_manager import mcp_manager
+        self.owner_email = owner_email
 
         self.encoder = HuggingFaceEncoder(name="sentence-transformers/all-MiniLM-L6-v2")
         self.router = self._build_semantic_router()
@@ -32,18 +34,24 @@ class FridayPipeline:
         self.truth_engine = TruthEngine()
         self.firewall = HallucinationFirewall()
         self.mcp = mcp_manager
+        
+        # Load persistent memory
+        persisted = load_session_memory(self.owner_email)
+        
         # Enhanced conversation memory with context persistence and personalization
         self.memory = {
-            "conversation_history": [],  # List of exchanges
-            "user_preferences": {},      # User-specific preferences
-            "context_summary": "",       # Summary of ongoing context
+            "conversation_history": persisted.get("conversation_history", []),
+            "user_preferences": persisted.get("user_preferences", {}),
+            "context_summary": persisted.get("context_summary", ""),
             "last_updated": datetime.now(),
-            "personalization_data": {},  # Learned user patterns
-            "max_history_length": 50,    # Keep last 50 exchanges
-            "predictive_suggestions": [], # Proactive suggestions based on context
-            "last_intent": None          # Last detected intent from user query
+            "personalization_data": persisted.get("personalization_data", {}),
+            "max_history_length": 50,
+            "predictive_suggestions": [],
+            "last_intent": None,
+            "entity_focus": None,        # Current entity being discussed (for pronoun resolution)
+            "recent_truth_alerts": []    # Flagged misinformation from recent history
         }
-        logger.info(f"FridayPipeline initialized in {time.monotonic() - t0:.2f}s")
+        logger.info(f"FridayPipeline initialized for {self.owner_email} in {time.monotonic() - t0:.2f}s")
 
     def reset_memory(self):
         """Reset conversation memory to initial state"""
@@ -81,11 +89,22 @@ class FridayPipeline:
             self.memory["conversation_history"] = self.memory["conversation_history"][-self.memory["max_history_length"]:]
         
         # Update last updated timestamp
-        self.memory["last_updated"] = datetime.now()
+        self.memory["last_updated"] = datetime.now().isoformat()
+        
+        # Extract potential entity (simple heuristic: first capitalized word after 'what is' or 'who is')
+        if "is" in query.lower():
+            parts = query.split()
+            for i, word in enumerate(parts):
+                if word.lower() == "is" and i + 1 < len(parts):
+                    self.memory["entity_focus"] = parts[i+1].strip("?.,")
+                    break
         
         # Update context summary and predictive suggestions periodically
-        if len(self.memory["conversation_history"]) % 5 == 0:  # Every 5 exchanges
+        if len(self.memory["conversation_history"]) % 3 == 0:  # Every 3 exchanges for snappier adaptation
             self._update_context_summary()
+            
+        # Persist to disk
+        asyncio.create_task(asyncio.to_thread(save_session_memory, self.owner_email, self.memory))
 
     def _detect_intent(self, query: str) -> str:
         """Detect user intent from query using rule-based classification"""
@@ -331,16 +350,19 @@ class FridayPipeline:
             # Run blocking semantic router call in a thread to keep the loop alive
             route = await asyncio.to_thread(self.router, query)
             semantic_tier = route.name if route.name else "tier_2_standard"
+            score = getattr(route, "score", 0.0)
         except Exception as e:
             # Fallback if the router fails or hangs
             logger.error(f"Semantic router classification failed: {e}. Falling back to keyword boosting.")
             semantic_tier = "tier_2_standard"
+            score = 0.0
         
-        return self._boost_tier(query, semantic_tier)
+        return self._boost_tier(query, semantic_tier, score)
 
-    def _boost_tier(self, query: str, semantic_tier: str) -> str:
+    def _boost_tier(self, query: str, semantic_tier: str, score: float = 0.0) -> str:
         q_lower = query.lower()
-        if semantic_tier == "tier_2_standard":
+        # Only boost if semantic confidence is relatively low or no route was found
+        if score < 0.7 or semantic_tier == "tier_2_standard":
             if any(kw in q_lower for kw in self._DEEP_KEYWORDS):
                 return "tier_3_deep"
             if any(kw in q_lower for kw in self._FAST_KEYWORDS):
@@ -636,26 +658,22 @@ class FridayPipeline:
         if self.memory["conversation_history"]:
             conversation_context = f"Previous conversation context:\n{self._get_conversation_context()}\n\n"
         
-        # Add contextual awareness for proactive suggestions
-        proactive_context = ""
-        if self.memory["context_summary"]:
-            proactive_context = f"Context awareness: {self.memory['context_summary']}\n"
-            
-        # Add proactive suggestions if available
-        suggestions_context = ""
-        if self.memory.get("predictive_suggestions"):
-            suggestions_list = "\n".join([f"- {suggestion}" for suggestion in self.memory["predictive_suggestions"]])
-            suggestions_context = f"Proactive suggestions based on our conversation:\n{suggestions_list}\n\n"
+        # Detect misinformation in recent history for proactive correction
+        truth_alerts = self.truth_engine.detect_misinformation_in_history(self.memory["conversation_history"][-10:])
+        self.memory["recent_truth_alerts"] = [a["warning"] for a in truth_alerts]
         
-        # Detect emotion in query for emotional intelligence
-        emotion = friday_personality.detect_emotion(query)
-        emotion_context = ""
-        if emotion:
-            emotion_context = f"Detected user emotion: {emotion}. Respond with appropriate empathy and tone.\n"
-        
+        alert_context = ""
+        if self.memory["recent_truth_alerts"]:
+            alert_context = f"PROACTIVE ALERT: The following claims from earlier were found to be inaccurate. Gently correct them if relevant: {'; '.join(self.memory['recent_truth_alerts'])}\n"
+
+        # Add entity focus for pronoun resolution
+        entity_context = ""
+        if self.memory["entity_focus"]:
+            entity_context = f"Current entity focus: {self.memory['entity_focus']}. Use this to resolve pronouns like 'it', 'he', or 'she'.\n"
+
         # Get base response from LLM
         base_response = await llm.ainvoke(
-            f"You are Friday. {emotion_context}{proactive_context}{conversation_context}{suggestions_context}{instruction}\nContext: {context}\nQuery: {query}"
+            f"You are Friday. {emotion_context}{alert_context}{entity_context}{proactive_context}{conversation_context}{suggestions_context}{instruction}\nContext: {context}\nQuery: {query}"
         )
         
         # Adapt response based on detected emotion

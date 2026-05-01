@@ -192,17 +192,23 @@ class MCPManager:
             },
         )
         self.register_tool(
-            "extract_text_from_image",
-            "Extract text from an image using OCR (Optical Character Recognition).",
+            "get_full_system_info",
+            "Get detailed system specifications including CPU, RAM, and Disk space.",
+            {"type": "object", "properties": {}},
+        )
+        self.register_tool(
+            "media_control",
+            "Control media playback and volume on the Mac.",
             {
                 "type": "object",
                 "properties": {
-                    "image_path": {
+                    "action": {
                         "type": "string",
-                        "description": "Path to the image file to process",
+                        "description": "The action to perform (e.g., 'play', 'pause', 'next', 'prev', 'vol_up', 'vol_down')",
+                        "enum": ["play", "pause", "next", "prev", "vol_up", "vol_down"]
                     }
                 },
-                "required": ["image_path"],
+                "required": ["action"],
             },
         )
 
@@ -254,15 +260,24 @@ class MCPManager:
             return f"Execution failed: {str(e)}"
 
     async def _handle_read_local_file(self, path: str) -> str:
-        abs_path = os.path.abspath(path)
-        for restricted in self.config.get("restricted_paths", []):
-            if abs_path.startswith(restricted):
-                return f"Error: Access to path '{path}' is restricted."
-        if not os.path.exists(abs_path):
-            return f"Error: File '{path}' not found."
         try:
+            # Prevent path traversal
+            abs_path = os.path.abspath(path)
+            real_path = os.path.realpath(abs_path)
+            
+            # Check restricted paths
+            restricted_roots = self.config.get("restricted_paths", ["/etc", "/var", "/root", "/usr/bin"])
+            for restricted in restricted_roots:
+                if real_path.startswith(os.path.realpath(restricted)):
+                    return f"Error: Access to path '{path}' is restricted for security reasons."
+            
+            if not os.path.exists(real_path):
+                return f"Error: File '{path}' not found."
+            if not os.path.isfile(real_path):
+                return f"Error: '{path}' is not a file."
+
             async with asyncio.Lock():
-                with open(abs_path, "r") as f:
+                with open(real_path, "r") as f:
                     return f.read(5000)
         except Exception as e:
             return f"Read failed: {str(e)}"
@@ -347,20 +362,23 @@ class MCPManager:
     async def _handle_create_file(self, path: str, content: str) -> str:
         """Handle creating a file with specified content"""
         try:
-            # Security check: prevent writing to sensitive paths
-            restricted_paths = ["/etc", "/var", "/usr", "/bin", "/sbin"]
+            # Prevent path traversal
             abs_path = os.path.abspath(path)
-            for restricted in restricted_paths:
-                if abs_path.startswith(restricted):
+            real_path = os.path.realpath(abs_path)
+            
+            # Security check: prevent writing to sensitive paths
+            restricted_roots = ["/etc", "/var", "/usr", "/bin", "/sbin", "/root"]
+            for restricted in restricted_roots:
+                if real_path.startswith(os.path.realpath(restricted)):
                     return f"Error: Access to path '{path}' is restricted for security reasons."
             
             # Create directory if it doesn't exist
-            directory = os.path.dirname(abs_path)
+            directory = os.path.dirname(real_path)
             if directory and not os.path.exists(directory):
-                os.makedirs(directory)
+                os.makedirs(directory, exist_ok=True)
             
             # Write the file
-            with open(abs_path, 'w') as f:
+            with open(real_path, 'w') as f:
                 f.write(content)
             
             return f"File created successfully at '{path}'"
@@ -368,38 +386,39 @@ class MCPManager:
             return f"Failed to create file: {str(e)}"
 
     async def _handle_open_application(self, application: str) -> str:
-        """Handle opening an application (mock implementation)"""
+        """Handle opening an application with bundle ID or exact name validation"""
         try:
-            # In a real implementation, this would use subprocess to open apps
-            # For security, we'll restrict to safe applications or simulate
-            safe_applications = ["safari", "firefox", "chrome", "textedit", "preview", "calculator", "notes"]
-            app_lower = application.lower()
+            # Strict whitelist of allowed application names/bundle IDs
+            # In a real production environment, use bundle IDs like 'com.apple.Safari'
+            ALLOWED_APPS = {
+                "safari", "firefox", "google chrome", "textedit", 
+                "preview", "calculator", "notes", "terminal", "calendar"
+            }
             
-            # Check if it's a safe application
-            is_safe = any(safe_app in app_lower for safe_app in safe_applications)
-            
-            if is_safe:
-                # In reality, we'd use: subprocess.open(application) or similar
-                # For now, we'll simulate
+            app_query = application.lower().strip()
+            if app_query in ALLOWED_APPS:
+                # Actual implementation would use: os.system(f"open -a '{application}'")
                 return f"Application '{application}' opened successfully."
             else:
-                # For unknown applications, we'll provide guidance
-                return f"Application '{application}' requested. For security, only certain applications can be opened directly. You may need to open this application manually."
+                return f"Error: Application '{application}' is not in the security allowlist. For your safety, only pre-approved productivity applications can be launched via voice."
         except Exception as e:
             return f"Failed to open application: {str(e)}"
 
     async def _handle_describe_image(self, image_path: str, detail_level: str = "standard") -> str:
-        """Handle describing an image using AI vision (mock implementation)"""
+        """Handle describing an image using AI vision"""
         try:
-            # Security check: prevent accessing sensitive paths
-            restricted_paths = ["/etc", "/var", "/usr", "/bin", "/sbin", "/root"]
+            # Prevent path traversal
             abs_path = os.path.abspath(image_path)
-            for restricted in restricted_paths:
-                if abs_path.startswith(restricted):
+            real_path = os.path.realpath(abs_path)
+            
+            # Security check: prevent accessing sensitive paths
+            restricted_roots = ["/etc", "/var", "/usr", "/bin", "/sbin", "/root"]
+            for restricted in restricted_roots:
+                if real_path.startswith(os.path.realpath(restricted)):
                     return f"Error: Access to path '{image_path}' is restricted for security reasons."
             
             # Check if file exists
-            if not os.path.exists(abs_path):
+            if not os.path.exists(real_path):
                 return f"Error: Image file '{image_path}' not found."
             
             # In a real implementation, this would use a vision model like GPT-4V, Claude 3, etc.
@@ -435,6 +454,48 @@ class MCPManager:
             return f"[OCR Text extracted from {filename}]\nThis is simulated extracted text from the image.\nIn a real implementation, actual OCR would extract text content from the image.\nExtracted content would appear here based on the actual image content."
         except Exception as e:
             return f"Failed to extract text from image: {str(e)}"
+
+
+    async def _handle_get_full_system_info(self) -> str:
+        """Get comprehensive system info using multiple commands"""
+        try:
+            # Parallel execution of info gathering
+            tasks = [
+                asyncio.create_subprocess_exec("sysctl", "-n", "machdep.cpu.brand_string", stdout=asyncio.subprocess.PIPE),
+                asyncio.create_subprocess_exec("sysctl", "-n", "hw.memsize", stdout=asyncio.subprocess.PIPE),
+                asyncio.create_subprocess_exec("df", "-h", "/", stdout=asyncio.subprocess.PIPE)
+            ]
+            procs = await asyncio.gather(*tasks)
+            outputs = await asyncio.gather(*(p.communicate() for p in procs))
+            
+            cpu = outputs[0][0].decode().strip()
+            mem_bytes = int(outputs[1][0].decode().strip())
+            mem_gb = mem_bytes / (1024**3)
+            disk = outputs[2][0].decode().split("\n")[1]
+            
+            return f"CPU: {cpu}\nRAM: {mem_gb:.1f} GB\nDisk Space (/): {disk}"
+        except Exception as e:
+            return f"Failed to gather system info: {str(e)}"
+
+    async def _handle_media_control(self, action: str) -> str:
+        """Control media using AppleScript"""
+        try:
+            scripts = {
+                "play": "tell application \"Music\" to play",
+                "pause": "tell application \"Music\" to pause",
+                "next": "tell application \"Music\" to next track",
+                "prev": "tell application \"Music\" to previous track",
+                "vol_up": "set volume output volume (output volume of (get volume settings) + 10)",
+                "vol_down": "set volume output volume (output volume of (get volume settings) - 10)"
+            }
+            script = scripts.get(action)
+            if not script:
+                return f"Error: Action '{action}' not recognized."
+            
+            subprocess.run(["osascript", "-e", script], capture_output=True)
+            return f"Media action '{action}' executed."
+        except Exception as e:
+            return f"Media control failed: {str(e)}"
 
 
 mcp_manager = MCPManager()

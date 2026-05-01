@@ -116,7 +116,24 @@ async def _handle_query(
 
 
 @ws_router.websocket("/ws/stream")
-async def ws_stream(websocket: WebSocket) -> None:
+async def ws_stream(websocket: WebSocket, token: str | None = None) -> None:
+    from app.core.config import settings
+    from core.security import validate_api_key
+    
+    if not settings.ALLOW_ANONYMOUS_WS:
+        if not token:
+            await websocket.accept()
+            await _send_json(websocket, {"status": "error", "message": "Auth token required"})
+            await websocket.close(code=1008)
+            return
+        try:
+            validate_api_key(token)
+        except Exception as e:
+            await websocket.accept()
+            await _send_json(websocket, {"status": "error", "message": f"Invalid token: {str(e)}"})
+            await websocket.close(code=1008)
+            return
+
     await websocket.accept()
     logger.info("WebSocket client connected: /ws/stream")
     greeting = friday_personality.startup_greeting()
@@ -148,6 +165,7 @@ async def ws_stream(websocket: WebSocket) -> None:
             if payload_type == "interrupt" or friday_personality.detect_interruption(
                 normalized_query
             ):
+                tts_service.interrupt() # Stop TTS playback
                 if current_task and not current_task.done():
                     current_task.cancel()
                     with suppress(asyncio.CancelledError):
@@ -172,6 +190,7 @@ async def ws_stream(websocket: WebSocket) -> None:
                 continue
             pipeline = websocket.app.state.pipeline
             tier = await pipeline.classify(normalized_query)
+            tts_service.interrupt() # Interrupt previous response if a new one starts
             if current_task and not current_task.done():
                 current_task.cancel()
                 with suppress(asyncio.CancelledError):
@@ -214,7 +233,24 @@ async def ws_stream(websocket: WebSocket) -> None:
 
 
 @ws_router.websocket("/ws/voice")
-async def ws_voice(websocket: WebSocket) -> None:
+async def ws_voice(websocket: WebSocket, token: str | None = None) -> None:
+    from app.core.config import settings
+    from core.security import validate_api_key
+    
+    if not settings.ALLOW_ANONYMOUS_WS:
+        if not token:
+            await websocket.accept()
+            await _send_json(websocket, {"status": "error", "message": "Auth token required"})
+            await websocket.close(code=1008)
+            return
+        try:
+            validate_api_key(token)
+        except Exception as e:
+            await websocket.accept()
+            await _send_json(websocket, {"status": "error", "message": f"Invalid token: {str(e)}"})
+            await websocket.close(code=1008)
+            return
+
     await websocket.accept()
     logger.info("WebSocket client connected: /ws/voice")
     buffered_chunks: list[bytes] = []
@@ -272,6 +308,7 @@ async def ws_voice(websocket: WebSocket) -> None:
                 continue
             pipeline = websocket.app.state.pipeline
             tier = await pipeline.classify(text)
+            tts_service.interrupt() # Interrupt if user starts speaking again
             await _send_json(
                 websocket,
                 {

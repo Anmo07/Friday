@@ -22,6 +22,34 @@ class VoiceListener:
         self._running = False
         self._task: Optional[asyncio.Task] = None
         self._callback: Optional[Callable[[bytes], Awaitable]] = None
+        self._ambient_energy = 0.0
+
+    async def calibrate(self, duration: float = 1.0):
+        """Sample ambient noise to set a baseline energy threshold"""
+        try:
+            import sounddevice as sd
+            import numpy as np
+            logger.info("Calibrating microphone... please be quiet.")
+            
+            # Record ambient noise
+            recording = await asyncio.to_thread(
+                sd.rec,
+                frames=int(duration * self.sample_rate),
+                samplerate=self.sample_rate,
+                channels=1,
+                dtype="int16",
+                blocking=True
+            )
+            
+            # Calculate RMS of ambient noise
+            rms = self._calculate_rms(recording.tobytes())
+            self._ambient_energy = rms
+            
+            # Set threshold at 3.5x ambient RMS, but with a sane floor
+            self.energy_threshold = max(rms * 3.5, 800.0)
+            logger.info(f"Calibration complete. Ambient RMS: {rms:.0f}, New threshold: {self.energy_threshold:.0f}")
+        except Exception as e:
+            logger.warning(f"Calibration failed: {e}. Using default threshold: {self.energy_threshold}")
 
     @staticmethod
     def _calculate_rms(audio_chunk: bytes) -> float:
@@ -36,6 +64,10 @@ class VoiceListener:
         if self._running:
             logger.warning("Listener already running")
             return
+        
+        # Auto-calibrate before starting
+        await self.calibrate()
+        
         self._callback = callback
         self._running = True
         self._task = asyncio.create_task(self._listen_loop())

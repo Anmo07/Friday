@@ -111,3 +111,17 @@ class TruthEngine:
         except ImportError:
             pass
         return {"truth_score": round(final_score, 3), "breakdown": breakdown}
+
+    def detect_misinformation_in_history(self, history: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Scan history for claims with low truth scores and flag them as misinformation alerts"""
+        alerts = []
+        for exchange in history:
+            # If we have a truth score from a previous analysis
+            if "truth_score" in exchange and exchange["truth_score"] < 0.6:
+                alerts.append({
+                    "timestamp": exchange.get("timestamp"),
+                    "query": exchange.get("query"),
+                    "warning": f"Boss, I noticed a previous claim about '{exchange.get('query')[:50]}...' might be inaccurate based on my latest data.",
+                    "score": exchange["truth_score"]
+                })
+        return alerts

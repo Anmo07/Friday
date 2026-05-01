@@ -3,6 +3,7 @@ import logging
 from typing import AsyncGenerator
 import edge_tts
 from app.core.config import settings
+from app.voice.piper_service import piper_service
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +15,15 @@ class TTSService:
         self._pitch = "+0Hz"
         self._volume = "+0%"
         self._lock = asyncio.Lock() # Lock to prevent multiple audio streams from interleaving
+        self._interrupt_requested = False
+
+    def interrupt(self):
+        """Set interrupt flag to stop current playback"""
+        self._interrupt_requested = True
+        logger.debug("TTS Interrupt requested")
+
+    def _reset_interrupt(self):
+        self._interrupt_requested = False
 
     def set_voice(self, voice_name: str):
         self._voice = voice_name
@@ -22,8 +32,15 @@ class TTSService:
     async def stream_audio(self, text: str) -> AsyncGenerator[bytes, None]:
         if not text:
             return
+            
+        if settings.USE_LOCAL_TTS or settings.PRIVACY_MODE:
+            logger.debug("Using local Piper TTS engine")
+            async for chunk in piper_service.stream_audio(text):
+                yield chunk
+            return
         
         async with self._lock: # Acquire lock before starting stream
+            self._reset_interrupt()
             try:
                 clean_text = text.replace("*", "").replace("#", "").strip()
                 communicate = edge_tts.Communicate(
@@ -36,6 +53,9 @@ class TTSService:
                 start_time = asyncio.get_event_loop().time()
                 first_chunk_sent = False
                 async for chunk in communicate.stream():
+                    if self._interrupt_requested:
+                        logger.info("TTS Stream interrupted mid-playback")
+                        break
                     if chunk["type"] == "audio":
                         if not first_chunk_sent:
                             ttfa = (asyncio.get_event_loop().time() - start_time) * 1000
