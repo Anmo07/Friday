@@ -34,8 +34,8 @@ class Settings(BaseSettings):
     STT_MODEL_SIZE: str = "base"
     STT_DEVICE: str = "cpu"
     STT_COMPUTE_TYPE: str = "int8"
-    TTS_PROVIDER: str = "pyttsx3"
-    TTS_VOICE_PROFILE: str = "friday"
+    TTS_PROVIDER: str = "edge-tts"
+    TTS_VOICE_PROFILE: str = "en-US-JennyNeural"
     TTS_SPEECH_RATE: int = 190
     CONTROL_CONFIRMATION_POLICY: str = "confirm_high_risk"
     CONTROL_AUDIT_LOG_PATH: str = "./logs/control_audit.log"

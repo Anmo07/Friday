@@ -171,7 +171,7 @@ async def ws_stream(websocket: WebSocket) -> None:
                 )
                 continue
             pipeline = websocket.app.state.pipeline
-            tier = pipeline.classify(normalized_query)
+            tier = await pipeline.classify(normalized_query)
             if current_task and not current_task.done():
                 current_task.cancel()
                 with suppress(asyncio.CancelledError):
@@ -271,7 +271,7 @@ async def ws_voice(websocket: WebSocket) -> None:
                 )
                 continue
             pipeline = websocket.app.state.pipeline
-            tier = pipeline.classify(text)
+            tier = await pipeline.classify(text)
             await _send_json(
                 websocket,
                 {

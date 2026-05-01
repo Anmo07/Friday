@@ -6,9 +6,9 @@ from unittest.mock import MagicMock, AsyncMock
 @pytest.mark.asyncio
 async def test_pipeline_classification():
     pipeline = FridayPipeline()
-    assert pipeline.classify("open the terminal") == "tier_1_fast"
-    assert pipeline.classify("what is the capital of France") == "tier_2_standard"
-    assert pipeline.classify("investigate the financial report") == "tier_3_deep"
+    assert await pipeline.classify("open the terminal") == "tier_1_fast"
+    assert await pipeline.classify("what is the capital of France") == "tier_2_standard"
+    assert await pipeline.classify("investigate the financial report") == "tier_3_deep"
 
 @pytest.mark.asyncio
 async def test_pipeline_stream_run_mocked(monkeypatch):

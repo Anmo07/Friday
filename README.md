@@ -155,6 +155,12 @@ All developer endpoints require an `X-API-KEY` header (except internal UI routes
 ### Hallucination Firewall
 Friday implements a custom evaluation layer that sits between the Agent Swarm and the User. It uses **Graph Validation** and **Contradiction Detection** to ensure that agents do not invent claims not found in the source documents.
 
+### High-Performance Engine (v0.2.0)
+The latest engine features an **Async-Safe High-Performance Pipeline** designed for sub-200ms conversational responsiveness:
+- **Non-Blocking Classification:** Intent detection and tier routing run in dedicated threads to keep the event loop responsive.
+- **RMS-Calibrated Voice Capture:** Custom audio listener with precise energy thresholding for stable voice interaction in noisy environments.
+- **Neural Streaming TTS:** Integrated Edge Neural Voice synthesis with pre-calculated prosody for instant conversational feedback.
+
 ### Predictive Intelligence
 The **Predictive Intelligence Engine** monitors global query clusters. By analyzing the velocity of specific keyword spikes (e.g., "election fraud", "vaccine leak"), it can flag astroturfed misinformation campaigns minutes before they saturate social networks.
 
