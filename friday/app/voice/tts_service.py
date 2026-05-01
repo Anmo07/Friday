@@ -39,6 +39,8 @@ class TTSService:
                         logger.debug(f"TTS TTFA: {ttfa:.1f}ms")
                         first_chunk_sent = True
                     yield chunk["data"]
+        except asyncio.TimeoutError:
+            logger.error("TTS Stream Timeout")
         except Exception as e:
             logger.error(f"TTS Stream Error: {e}")
 

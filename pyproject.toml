@@ -24,6 +24,8 @@ dependencies = [
     "edge-tts>=6.1.13",
     "sounddevice>=0.4.6",
     "slowapi>=0.1.9",
+    "rumps>=0.4.0",
+    "rich>=13.7.0",
 ]
 
 [project.scripts]

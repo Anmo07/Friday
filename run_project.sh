@@ -68,9 +68,14 @@ docker_logs() {
 }
 
 local_start() {
-  require_cmd python3
+  local PYTHON_EXEC="python3"
+  if [[ -f "$SCRIPT_DIR/.venv/bin/python" ]]; then
+    PYTHON_EXEC="$SCRIPT_DIR/.venv/bin/python"
+  fi
+  
+  echo "Using Python: $PYTHON_EXEC"
   cd "$STACK_DIR"
-  nohup python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8001 > "$SCRIPT_DIR/.friday-local.log" 2>&1 &
+  nohup "$PYTHON_EXEC" -m uvicorn app.main:app --host 0.0.0.0 --port 8001 > "$SCRIPT_DIR/.friday-local.log" 2>&1 &
   echo $! > "$LOCAL_PID_FILE"
   echo "Started local backend PID $(cat "$LOCAL_PID_FILE")"
   wait_for_url "http://localhost:8001/api/v1/health" 30 1 || {

@@ -10,8 +10,8 @@ logger = logging.getLogger(__name__)
 class VoiceListener:
     def __init__(
         self,
-        energy_threshold: float = 1000.0,
-        silence_timeout: float = 2.0,
+        energy_threshold: float = 1200.0,
+        silence_timeout: float = 3.0,
         sample_rate: int = 16000,
         chunk_size: int = 1024,
     ):

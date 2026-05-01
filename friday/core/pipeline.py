@@ -324,12 +324,14 @@ class FridayPipeline:
         "disk space",
     }
 
-    def classify(self, query: str) -> str:
+    async def classify(self, query: str) -> str:
+        """Classify query into a tier using semantic router with fallback."""
         try:
-            route = self.router(query)
+            # Run blocking semantic router call in a thread to keep the loop alive
+            route = await asyncio.to_thread(self.router, query)
             semantic_tier = route.name if route.name else "tier_2_standard"
         except Exception as e:
-            # Fallback if the router fails (e.g. "Index is not ready")
+            # Fallback if the router fails or hangs
             logger.error(f"Semantic router classification failed: {e}. Falling back to keyword boosting.")
             semantic_tier = "tier_2_standard"
         
@@ -371,7 +373,7 @@ class FridayPipeline:
         return sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)
 
     async def run(self, query: str, voice_mode: bool = False) -> Dict[str, Any]:
-        tier = self.classify(query)
+        tier = await self.classify(query)
         if tier == "tier_1_fast":
             if any(kw in query.lower() for kw in self._FAST_KEYWORDS):
                 response = await self._run_mcp_agent(query)
@@ -432,7 +434,7 @@ class FridayPipeline:
     async def stream_run(
         self, query: str, voice_mode: bool = False
     ) -> AsyncGenerator[str, None]:
-        tier = self.classify(query)
+        tier = await self.classify(query)
         from models.ollama_runtime import resolve_model_name
 
         voice_instructions = ""

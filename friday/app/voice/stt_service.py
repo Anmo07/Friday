@@ -36,19 +36,29 @@ class STTService:
     async def transcribe(self, audio_bytes: bytes) -> str:
         if not audio_bytes:
             return ""
+        import wave
+        
         start_time = time.time()
         model = await asyncio.to_thread(self._get_model)
+        
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-            tmp.write(audio_bytes)
             tmp_path = tmp.name
+            
         try:
+            # Write raw PCM to WAV file
+            with wave.open(tmp_path, "wb") as wav_file:
+                wav_file.setnchannels(1)
+                wav_file.setsampwidth(2) # 16-bit
+                wav_file.setframerate(16000)
+                wav_file.writeframes(audio_bytes)
+                
             segments, info = await asyncio.to_thread(
                 model.transcribe,
                 tmp_path,
                 beam_size=1,
                 language="en",
                 vad_filter=True,
-                vad_parameters=dict(min_silence_duration_ms=500),
+                vad_parameters=dict(min_silence_duration_ms=250),
                 initial_prompt="Friday assistant loop.",
             )
             text = " ".join(segment.text.strip() for segment in segments)

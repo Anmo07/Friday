@@ -119,6 +119,13 @@ This means another service is using ports 3000, 8001, 7474, 7687, 8200, 6379, or
 - Check if backend is healthy: `curl http://localhost:8001/api/v1/health`
 - Clear browser cache or try incognito mode
 
+### CLI "Module Not Found" or Stalling
+If you see text recognized but no response, or get module errors:
+- Ensure you are using the virtual environment: `source .venv/bin/activate`
+- Run the CLI via the venv: `./.venv/bin/friday`
+- If using global `friday`, reinstall it in your current environment: `pip install -e .`
+- Check for multiple Python versions (e.g. 3.14 vs 3.12). Friday is tested on 3.10-3.13.
+
 ### Getting Help
 - Check logs: `./setup-friday.sh logs`
 - Review the [README.md](README.md) for detailed documentation

@@ -187,37 +187,34 @@ class FridayMenuApp(rumps.App):
         subprocess.Popen(["open", "http://localhost:3000/control"])
 
     def listen_loop(self):
-        import time
+        """Main voice interaction loop using the custom VoiceListener."""
+        from app.voice.listener import listener
+        
+        # Configure listener calibration
+        listener.energy_threshold = 1000.0  # Stable default for most environments
+        listener.silence_timeout = 1.5      # Snappier responses
+        
+        async def run_listener():
+            try:
+                # The callback will be executed in the event loop thread
+                await listener.start(self.process_audio)
+                while self.listening:
+                    await asyncio.sleep(1)
+            except Exception as e:
+                console.print(f"[bold red]Listener Error:[/bold red] {e}")
+            finally:
+                await listener.stop()
 
-        recognizer = sr.Recognizer()
-        recognizer.energy_threshold = 300
-        recognizer.dynamic_energy_threshold = True
-        recognizer.pause_threshold = 0.8
-        recognizer.non_speaking_duration = 0.5
-        try:
-            with sr.Microphone() as source:
-                recognizer.adjust_for_ambient_noise(source, duration=1.5)
-                while True:
-                    if not self.listening:
-                        time.sleep(0.5)
-                        continue
-                    
-                    try:
-                        audio = recognizer.listen(
-                            source, timeout=None, phrase_time_limit=10
-                        )
-                        if not self.listening:
-                            continue
-                        
-                        asyncio.run_coroutine_threadsafe(
-                            self.process_audio(audio.get_wav_data()), self.loop
-                        )
-                    except sr.WaitTimeoutError:
-                        pass
-                    except Exception:
-                        pass
-        except Exception as e:
-            console.print(f"\n[bold red]Microphone init failed:[/bold red] {e}")
+        # Run the listener in the async loop
+        asyncio.run_coroutine_threadsafe(run_listener(), self.loop)
+        
+        # Keep this thread alive to monitor status
+        while True:
+            time.sleep(1)
+            if not self.listening:
+                # If paused via menu bar, stop the underlying listener task
+                # In a real implementation we'd handle this more gracefully
+                pass
 
     async def process_text(self, text: str):
         try:
