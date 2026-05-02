@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from app.core.config import settings
 from app.core.cache import cache
+from feedback.feedback_service import UserFeedback
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1")
@@ -217,8 +218,13 @@ async def voice_stream_endpoint(request: Request):
     if not text:
         raise HTTPException(status_code=400, detail="Text required")
     from app.voice.tts_service import tts_service
+    media_type = (
+        "audio/wav"
+        if settings.USE_LOCAL_TTS or settings.PRIVACY_MODE
+        else "audio/mpeg"
+    )
 
-    return StreamingResponse(tts_service.stream_audio(text), media_type="audio/wav")
+    return StreamingResponse(tts_service.stream_audio(text), media_type=media_type)
 
 
 @router.get("/history")
@@ -235,20 +241,34 @@ async def get_history(request: Request, limit: int = 50):
 
 
 @router.post("/feedback")
-async def submit_feedback(request: Request):
+async def submit_feedback(feedback: UserFeedback, request: Request):
+    """
+    Handles user feedback with robust Pydantic validation.
+    Defaults original_truth_score to 0.0 if missing.
+    """
     try:
-        body = await request.json()
-        from feedback.feedback_service import UserFeedback, process_and_log_feedback
-
+        from feedback.feedback_service import process_and_log_feedback
         api_key = request.headers.get("X-API-KEY")
         owner_email = _get_owner_email(api_key, request) if api_key else "public"
-        feedback = UserFeedback(**body)
+        
         result = await asyncio.to_thread(
             process_and_log_feedback, feedback, owner_email
         )
         return {"status": "received", "message": "Feedback recorded", "result": result}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Feedback processing failed: {e}")
+        raise HTTPException(status_code=400, detail=f"Invalid feedback data: {str(e)}")
+
+
+@router.post("/memory/reset")
+async def reset_memory(request: Request):
+    """
+    Resets the context memory for the current pipeline session.
+    Ensures dictionary structures are preserved to avoid KeyErrors.
+    """
+    pipeline = _get_pipeline(request)
+    pipeline.reset_memory()
+    return {"status": "success", "message": "Memory reset successfully"}
 
 
 @router.post("/security/rotate-key")

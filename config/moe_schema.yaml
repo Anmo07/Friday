@@ -7,7 +7,8 @@ tiers:
     engine: "VibeVoice"
     tokenizer_frequency: 7.5  # Hz
     latency_target_ms: 150
-    models: ["vibevoice-acoustic-v1"]
+    models: ["vibevoice-acoustic-v1", "qwen-omni-turbo"]
+    quantization: "float16" # Audio tokens require higher precision
     priority: 0
     description: "End-to-end speech-to-speech for seamless, low-latency interaction."
 
@@ -17,6 +18,7 @@ tiers:
     latency_target_ms: 500
     models: ["phi3:mini", "llama3.2:3b", "mistral-7b-v0.3"]
     default_model: "phi3:mini"
+    quantization: "INT4" # Ultra-fast edge inference
     priority: 1
     description: "System commands, quick lookups, and simple automation."
 
@@ -26,6 +28,7 @@ tiers:
     latency_target_ms: 1500
     models: ["llama3.1:8b-instruct", "gemma2:9b"]
     default_model: "llama3.1:8b-instruct"
+    quantization: "INT8" # Balanced precision/throughput
     priority: 2
     description: "General questions, context-aware chatting, and information retrieval."
 

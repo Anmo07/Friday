@@ -23,6 +23,7 @@ import { useWebSocket } from "@/hooks/useWebSocket";
 import { WS_BASE_URL, formatPercent } from "@/services/api";
 import { QueryResponse } from "@/types/api";
 import { ControlRoom } from "./ControlRoom";
+import { SiriOverlay } from "./SiriOverlay";
 
 type SpeechRecognitionInstance = {
   continuous: boolean;
@@ -92,6 +93,7 @@ export default function Dashboard() {
   const [micError, setMicError] = useState<string | null>(null);
   const [liveTranscript, setLiveTranscript] = useState("");
   const [lastUserQuery, setLastUserQuery] = useState("");
+  const [activeSSEQuery, setActiveSSEQuery] = useState("");
 
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const shouldKeepListeningRef = useRef(true);
@@ -143,9 +145,13 @@ export default function Dashboard() {
   const dispatchQuery = useCallback((transcript: string, isFinal = false) => {
     const cleaned = normalizeTranscript(transcript);
     if (!cleaned || cleaned === lastSentQueryRef.current) return;
-    lastSentQueryRef.current = cleaned;
     setLastUserQuery(cleaned);
     const useDeep = /(analyze deeply|compare|news breakdown|in-depth|full analysis|deep dive|investigate)/i.test(cleaned);
+    
+    // Switch to SSE for Siri-style typing
+    setActiveSSEQuery(cleaned);
+    // Still send via WebSocket if needed for other dashboard state, 
+    // but SiriOverlay will handle the typing.
     sendQuery(cleaned, { deep: useDeep });
     setLiveTranscript("");
   }, [sendQuery]);
@@ -232,6 +238,14 @@ export default function Dashboard() {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,0.08),transparent_50%)]" />
       <div className="absolute inset-0 cr-grid-bg" />
       
+      {/* Siri-style UI Overlay */}
+      {activeSSEQuery && (
+        <SiriOverlay 
+          query={activeSSEQuery} 
+          onComplete={() => setActiveSSEQuery("")} 
+        />
+      )}
+
       <div className="relative z-10 max-w-7xl mx-auto flex flex-col gap-8">
         
         {/* TOP CENTER ORB */}

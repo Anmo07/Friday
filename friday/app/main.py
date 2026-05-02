@@ -19,6 +19,23 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _cleanup_ports(ports=[3000, 8001]):
+    import subprocess
+    for port in ports:
+        try:
+            # Check if port is in use and kill the process
+            cmd = f"lsof -t -i:{port}"
+            pids = subprocess.check_output(cmd, shell=True).decode().split()
+            for pid in pids:
+                logger.info(f"Cleaning up port {port} (PID: {pid})")
+                subprocess.run(f"kill -9 {pid}", shell=True)
+        except subprocess.CalledProcessError:
+            # Port not in use
+            pass
+        except Exception as e:
+            logger.warning(f"Port cleanup failed for {port}: {e}")
+
+
 async def _init_cache():
     try:
         await cache.connect(redis_url=settings.redis_url, timeout=2.0)
@@ -52,6 +69,7 @@ async def _preload_models_background():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _cleanup_ports()
     await asyncio.gather(_init_cache(), _init_databases(), return_exceptions=True)
     try:
         from core.pipeline import FridayPipeline

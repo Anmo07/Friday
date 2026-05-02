@@ -31,11 +31,20 @@ class UserFeedback(BaseModel):
         return max(0.0, min(numeric_value, 1.0))
 
 
-def _get_connection() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH, timeout=5)
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA synchronous=NORMAL")
-    return conn
+def _get_connection(retries: int = 5, delay: float = 0.5) -> sqlite3.Connection:
+    for i in range(retries):
+        try:
+            conn = sqlite3.connect(DB_PATH, timeout=5)
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            return conn
+        except sqlite3.OperationalError as e:
+            if i == retries - 1:
+                raise
+            logging.getLogger(__name__).warning(f"SQLite connection attempt {i+1} failed: {e}. Retrying...")
+            import time
+            time.sleep(delay * (2 ** i))
+    return sqlite3.connect(DB_PATH)
 
 
 def init_feedback_database():

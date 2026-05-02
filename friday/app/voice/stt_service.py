@@ -11,27 +11,28 @@ logger = logging.getLogger(__name__)
 class STTService:
     def __init__(self):
         self._model = None
+        self._fun_model = None
         self._model_size = "large-v3-turbo"
         self._device = "cpu"
         self._compute_type = "int8"
         self._num_workers = 2
+        self._engine = settings.STT_ENGINE if hasattr(settings, "STT_ENGINE") else "whisper"
 
     def _get_model(self):
+        if self._engine == "funasr":
+            return self._get_fun_model()
         if self._model is None:
             from faster_whisper import WhisperModel
-
-            logger.info(
-                f"Loading Whisper {self._model_size} ({self._compute_type}) on {self._device}..."
-            )
-            self._model = WhisperModel(
-                self._model_size,
-                device=self._device,
-                compute_type=self._compute_type,
-                cpu_threads=4,
-                num_workers=self._num_workers,
-            )
-            logger.info("Whisper Large V3 Turbo ready.")
+            logger.info(f"Loading Whisper {self._model_size}...")
+            self._model = WhisperModel(self._model_size, device=self._device, compute_type=self._compute_type)
         return self._model
+
+    def _get_fun_model(self):
+        if self._fun_model is None:
+            from funasr import AutoModel
+            logger.info("Loading Fun-ASR (SenseVoiceSmall) for high-noise robustness...")
+            self._fun_model = AutoModel(model="iic/SenseVoiceSmall", device=self._device)
+        return self._fun_model
 
     async def transcribe(self, audio_bytes: bytes) -> str:
         if not audio_bytes:
@@ -56,6 +57,10 @@ class STTService:
             return ""
 
         async def _run_transcription(vad_enabled: bool):
+            if self._engine == "funasr":
+                res = await asyncio.to_thread(model.generate, input=audio_np, cache={}, language="auto", use_itn=True)
+                return res[0]['text']
+            
             segments, info = await asyncio.to_thread(
                 model.transcribe,
                 audio_np,

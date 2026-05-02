@@ -10,12 +10,24 @@ os.makedirs(DB_DIR, exist_ok=True)
 DB_PATH = os.path.join(DB_DIR, "query_history.sqlite")
 
 
-def _get_connection() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH, timeout=5)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA synchronous=NORMAL")
-    return conn
+def _get_connection(retries: int = 5, delay: float = 0.5) -> sqlite3.Connection:
+    for i in range(retries):
+        try:
+            conn = sqlite3.connect(DB_PATH, timeout=5)
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            return conn
+        except sqlite3.OperationalError as e:
+            if i == retries - 1:
+                raise
+            logger.warning(f"SQLite connection attempt {i+1} failed: {e}. Retrying...")
+            time.sleep(delay * (2 ** i))
+    return sqlite3.connect(DB_PATH) # Fallback
+
+import time
+import logging
+logger = logging.getLogger(__name__)
 
 
 def init_history_database() -> None:
