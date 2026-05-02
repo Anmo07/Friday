@@ -35,11 +35,7 @@ dependencies = [
 friday = "friday.cli:main"
 
 [tool.setuptools]
-package-dir = {"" = "friday"}
-
-[tool.setuptools.packages.find]
-where = ["friday"]
-include = ["*"]
+packages = ["friday", "friday.app", "friday.core", "friday.models", "friday.system"]
 
 [tool.pyrefly]
 search_path = ["friday"]
