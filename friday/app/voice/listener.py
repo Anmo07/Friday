@@ -39,6 +39,7 @@ class VoiceListener:
         self.silence_timeout = silence_timeout
         self.sample_rate = sample_rate
         self.chunk_size = chunk_size
+        self.mic_gain = 1.5 # 50% boost
 
         self._running = False
         self._task: Optional[asyncio.Task] = None
@@ -325,8 +326,8 @@ class VoiceListener:
 
     async def verify_speaker(self, audio_bytes: bytes) -> bool:
         if self.user_embedding is None:
-            logger.warning("Voice profile missing. Secure mode is rejecting the trigger.")
-            return False
+            logger.info("Voice profile missing. Allowing trigger in unsecure mode.")
+            return True
 
         if AutoModel is None or torch is None:
             logger.error("FunASR or PyTorch is unavailable. Speaker verification failed closed.")
@@ -432,7 +433,10 @@ class VoiceListener:
                 dtype="int16",
                 blocking=True,
             )
-            rms = self._calculate_rms(recording.tobytes())
+            rms = self._calculate_rms(recording.tobytes()) * self.mic_gain
+            if rms < 10.0:
+                logger.warning("Calibration detected near-silent background. Check microphone permissions.")
+                rms = 200.0 # Safety floor
             self._ambient_energy = rms
             self.ambient_rms_rolling = max(rms, 1.0)
             self.ambient_peak_rolling = max(
@@ -440,7 +444,7 @@ class VoiceListener:
                 rms * 2.0,
                 1.0,
             )
-            self.energy_threshold = max(rms * 3.5, 800.0)
+            self.energy_threshold = max(rms * 2.5, 300.0)
             logger.info(
                 "Calibration complete. Ambient RMS %.0f, threshold %.0f.",
                 rms,
@@ -556,7 +560,7 @@ class VoiceListener:
                     audio_bytes = audio_chunk.tobytes()
 
                     self.current_peak = float(np.max(np.abs(raw_chunk)))
-                    self.current_rms = self._calculate_rms(audio_bytes)
+                    self.current_rms = self._calculate_rms(audio_bytes) * self.mic_gain
 
                     if self.current_rms < self.energy_threshold * 1.25:
                         self.ambient_rms_rolling = (

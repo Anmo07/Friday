@@ -1,38 +1,96 @@
-2026-05-02 22:24:15,147 [INFO] friday.core.startup_validation: Starting startup validation...
-2026-05-02 22:24:15,379 [INFO] core.service_registry: All services are healthy.
-2026-05-02 22:24:15,384 [INFO] friday.core.startup_validation: Startup validation complete.
-2026-05-02 22:24:15,399 [INFO] friday.macos_menu_bar: Started local backend at http://localhost:8001/api/v1.
-2026-05-02 22:24:23,507 [INFO] httpx: HTTP Request: GET http://localhost:8001/api/v1/health "HTTP/1.1 200 OK"
-2026-05-02 22:24:23,583 [INFO] friday.app.voice.listener: Calibrating microphone for 1.0s of ambient audio.
-2026-05-02 22:24:24,773 [INFO] friday.app.voice.listener: Calibration complete. Ambient RMS 541, threshold 1893.
-2026-05-02 22:24:24,773 [INFO] friday.app.voice.listener: Voice listener started.
-2026-05-02 22:24:24,774 [INFO] friday.macos_menu_bar: Friday Engine is now fully operational.
-2026-05-02 22:24:24,774 [INFO] friday.app.voice.listener: Opening input stream at 48000Hz.
-2026-05-02 22:24:24,870 [INFO] friday.app.voice.listener: Input stream active. Waiting for double clap or wake phrase.
-2026-05-03 00:25:45,823 [INFO] friday.core.startup_validation: Starting startup validation...
-2026-05-03 00:25:46,222 [INFO] core.service_registry: All services are healthy.
-2026-05-03 00:25:46,228 [INFO] friday.core.startup_validation: Startup validation complete.
-2026-05-03 00:25:46,234 [INFO] httpx: HTTP Request: GET http://localhost:8001/api/v1/health "HTTP/1.1 200 OK"
-2026-05-03 00:25:46,316 [INFO] friday.app.voice.listener: Calibrating microphone for 1.0s of ambient audio.
-2026-05-03 00:25:47,511 [INFO] friday.app.voice.listener: Calibration complete. Ambient RMS 162, threshold 800.
-2026-05-03 00:25:47,511 [INFO] friday.app.voice.listener: Voice listener started.
-2026-05-03 00:25:47,512 [INFO] friday.macos_menu_bar: Friday Engine is now fully operational.
-2026-05-03 00:25:47,512 [INFO] friday.app.voice.listener: Opening input stream at 48000Hz.
-2026-05-03 00:25:47,606 [INFO] friday.app.voice.listener: Input stream active. Waiting for double clap or wake phrase.
-2026-05-03 00:25:49,590 [INFO] friday.app.voice.stt_service: Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
-2026-05-03 00:25:50,398 [INFO] friday.app.voice.stt_service: Loading Whisper large-v3-turbo...
-2026-05-03 00:25:50,883 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/models/mobiuslabsgmbh/faster-whisper-large-v3-turbo/revision/main "HTTP/1.1 307 Temporary Redirect"
-2026-05-03 00:25:51,192 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/models/dropbox-dash/faster-whisper-large-v3-turbo/revision/main "HTTP/1.1 200 OK"
-2026-05-03 00:25:53,072 [INFO] faster_whisper: Processing audio with duration 00:00.575
-2026-05-03 00:25:53,170 [INFO] faster_whisper: VAD filter removed 00:00.144 of audio
-2026-05-03 00:26:41,193 [INFO] friday.core.startup_validation: Starting startup validation...
-2026-05-03 00:26:41,429 [INFO] core.service_registry: All services are healthy.
-2026-05-03 00:26:41,434 [INFO] friday.core.startup_validation: Startup validation complete.
-2026-05-03 00:26:41,439 [INFO] httpx: HTTP Request: GET http://localhost:8001/api/v1/health "HTTP/1.1 200 OK"
-2026-05-03 00:26:41,544 [INFO] friday.app.voice.listener: Calibrating microphone for 1.0s of ambient audio.
-2026-05-03 00:26:42,843 [INFO] friday.app.voice.listener: Calibration complete. Ambient RMS 0, threshold 800.
-2026-05-03 00:26:42,843 [INFO] friday.app.voice.listener: Voice listener started.
-2026-05-03 00:26:42,844 [INFO] friday.macos_menu_bar: Friday Engine is now fully operational.
-2026-05-03 00:26:42,845 [INFO] friday.app.voice.listener: Opening input stream at 48000Hz.
-2026-05-03 00:26:42,996 [INFO] friday.app.voice.listener: Input stream active. Waiting for double clap or wake phrase.
-2026-05-03 00:29:20,897 [INFO] friday.app.voice.listener: Voice listener stopped.
+/opt/homebrew/Cellar/python@3.12/3.12.13_2/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/resource_tracker.py:279: UserWarning: resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown
+  warnings.warn('resource_tracker: There appear to be %d '
+x: HTTP Request: GET http://localhost:8001/api/v1/health "HTTP/1.1 200 OK"
+2026-05-03 00:47:17,935 [INFO] friday.app.voice.listener: Calibrating microphone for 1.0s of ambient audio.
+2026-05-03 00:47:19,312 [WARNING] friday.app.voice.listener: Calibration detected near-silent background. Check microphone permissions.
+2026-05-03 00:47:19,313 [INFO] friday.app.voice.listener: Calibration complete. Ambient RMS 200, threshold 500.
+2026-05-03 00:47:19,313 [INFO] friday.app.voice.listener: Voice listener started.
+2026-05-03 00:47:19,314 [INFO] friday.macos_menu_bar: Friday Engine is now fully operational.
+2026-05-03 00:47:19,314 [INFO] friday.app.voice.listener: Opening input stream at 16000Hz.
+2026-05-03 00:47:19,390 [INFO] friday.app.voice.listener: Input stream active. Waiting for double clap or wake phrase.
+2026-05-03 00:47:21,130 [INFO] friday.app.voice.stt_service: Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+2026-05-03 00:47:21,509 [INFO] friday.app.voice.stt_service: Loading Whisper large-v3-turbo...
+2026-05-03 00:47:22,024 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/models/mobiuslabsgmbh/faster-whisper-large-v3-turbo/revision/main "HTTP/1.1 307 Temporary Redirect"
+2026-05-03 00:47:22,536 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/models/dropbox-dash/faster-whisper-large-v3-turbo/revision/main "HTTP/1.1 200 OK"
+2026-05-03 00:47:23,630 [INFO] faster_whisper: Processing audio with duration 00:01.728
+2026-05-03 00:47:23,659 [INFO] faster_whisper: VAD filter removed 00:01.728 of audio
+2026-05-03 00:47:23,661 [INFO] faster_whisper: Processing audio with duration 00:01.728
+2026-05-03 00:47:31,630 [INFO] friday.app.voice.stt_service: Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+2026-05-03 00:47:31,631 [INFO] faster_whisper: Processing audio with duration 00:01.728
+2026-05-03 00:47:31,642 [INFO] faster_whisper: VAD filter removed 00:01.728 of audio
+2026-05-03 00:47:31,647 [INFO] faster_whisper: Processing audio with duration 00:01.728
+2026-05-03 00:47:51,909 [INFO] friday.app.voice.stt_service: Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+2026-05-03 00:47:51,910 [INFO] faster_whisper: Processing audio with duration 00:01.728
+2026-05-03 00:47:51,921 [INFO] faster_whisper: VAD filter removed 00:01.728 of audio
+2026-05-03 00:47:51,932 [INFO] faster_whisper: Processing audio with duration 00:01.728
+2026-05-03 00:48:09,467 [INFO] friday.app.voice.stt_service: Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+2026-05-03 00:48:09,468 [INFO] faster_whisper: Processing audio with duration 00:01.728
+2026-05-03 00:48:09,478 [INFO] faster_whisper: VAD filter removed 00:01.728 of audio
+2026-05-03 00:48:09,480 [INFO] faster_whisper: Processing audio with duration 00:01.728
+2026-05-03 00:48:19,110 [INFO] friday.app.voice.stt_service: Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+2026-05-03 00:48:19,111 [INFO] faster_whisper: Processing audio with duration 00:01.728
+2026-05-03 00:48:19,123 [INFO] faster_whisper: VAD filter removed 00:01.296 of audio
+2026-05-03 00:48:40,869 [INFO] friday.app.voice.stt_service: Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+2026-05-03 00:48:40,870 [INFO] faster_whisper: Processing audio with duration 00:01.728
+2026-05-03 00:48:40,877 [INFO] faster_whisper: VAD filter removed 00:01.728 of audio
+2026-05-03 00:48:40,879 [INFO] faster_whisper: Processing audio with duration 00:01.728
+2026-05-03 00:48:47,008 [INFO] friday.app.voice.listener: Voice listener stopped.
+2026-05-03 00:48:47,008 [INFO] friday.app.voice.listener: Recording 6s of enrollment audio for authorized speaker.
+2026-05-03 00:48:53,242 [INFO] friday.app.voice.listener: Loading FunASR speaker model iic/speech_campplus_sv_en_voxceleb_16k on CPU.
+2026-05-03 00:48:53,486 [INFO] root: download models from model hub: ms
+2026-05-03 00:48:58,083 [WARNING] root: trust_remote_code: False
+2026-05-03 00:48:58,091 [ERROR] friday.macos_menu_bar: Voice enrollment failed: iic/speech_campplus_sv_en_voxceleb_16k is not registered
+Traceback (most recent call last):
+  File "/Users/anmol/Downloads/Developer/Friday/friday/macos_menu_bar.py", line 664, in _enroll_voice_profile
+    await listener.capture_user_profile(duration=6)
+  File "/Users/anmol/Downloads/Developer/Friday/friday/app/voice/listener.py", line 397, in capture_user_profile
+    embeddings.append(await self._compute_embedding(chunk))
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/anmol/Downloads/Developer/Friday/friday/app/voice/listener.py", line 235, in _compute_embedding
+    await self._ensure_sv_model()
+  File "/Users/anmol/Downloads/Developer/Friday/friday/app/voice/listener.py", line 226, in _ensure_sv_model
+    self.sv_model = await asyncio.to_thread(_load)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.12/3.12.13_2/Frameworks/Python.framework/Versions/3.12/lib/python3.12/asyncio/threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.12/3.12.13_2/Frameworks/Python.framework/Versions/3.12/lib/python3.12/asyncio/futures.py", line 289, in __await__
+    yield self  # This tells Task to wait for completion.
+    ^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.12/3.12.13_2/Frameworks/Python.framework/Versions/3.12/lib/python3.12/asyncio/tasks.py", line 385, in __wakeup
+    future.result()
+  File "/opt/homebrew/Cellar/python@3.12/3.12.13_2/Frameworks/Python.framework/Versions/3.12/lib/python3.12/asyncio/futures.py", line 202, in result
+    raise self._exception.with_traceback(self._exception_tb)
+  File "/opt/homebrew/Cellar/python@3.12/3.12.13_2/Frameworks/Python.framework/Versions/3.12/lib/python3.12/concurrent/futures/thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/anmol/Downloads/Developer/Friday/friday/app/voice/listener.py", line 224, in _load
+    return AutoModel(model=self.sv_model_id, device="cpu")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/anmol/Downloads/Developer/Friday/venv/lib/python3.12/site-packages/funasr/auto/auto_model.py", line 135, in __init__
+    model, kwargs = self.build_model(**kwargs)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/anmol/Downloads/Developer/Friday/venv/lib/python3.12/site-packages/funasr/auto/auto_model.py", line 281, in build_model
+    assert model_class is not None, f'{kwargs["model"]} is not registered'
+           ^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: iic/speech_campplus_sv_en_voxceleb_16k is not registered
+2026-05-03 00:48:59,596 [INFO] friday.app.voice.listener: Calibrating microphone for 1.0s of ambient audio.
+2026-05-03 00:49:01,002 [WARNING] friday.app.voice.listener: Calibration detected near-silent background. Check microphone permissions.
+2026-05-03 00:49:01,003 [INFO] friday.app.voice.listener: Calibration complete. Ambient RMS 200, threshold 500.
+2026-05-03 00:49:01,003 [INFO] friday.app.voice.listener: Voice listener started.
+2026-05-03 00:49:01,004 [INFO] friday.app.voice.listener: Opening input stream at 16000Hz.
+2026-05-03 00:49:01,117 [INFO] friday.app.voice.listener: Input stream active. Waiting for double clap or wake phrase.
+2026-05-03 00:49:03,039 [INFO] friday.app.voice.stt_service: Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+2026-05-03 00:49:03,040 [INFO] faster_whisper: Processing audio with duration 00:01.728
+2026-05-03 00:49:03,052 [INFO] faster_whisper: VAD filter removed 00:01.296 of audio
+2026-05-03 00:49:09,191 [INFO] friday.app.voice.stt_service: Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+2026-05-03 00:49:09,191 [INFO] faster_whisper: Processing audio with duration 00:01.728
+2026-05-03 00:49:09,197 [INFO] faster_whisper: VAD filter removed 00:00.896 of audio
+2026-05-03 00:49:39,998 [INFO] friday.app.voice.stt_service: Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+2026-05-03 00:49:39,999 [INFO] faster_whisper: Processing audio with duration 00:01.728
+2026-05-03 00:49:40,009 [INFO] faster_whisper: VAD filter removed 00:01.728 of audio
+2026-05-03 00:49:40,011 [INFO] faster_whisper: Processing audio with duration 00:01.728
+2026-05-03 00:49:49,758 [INFO] friday.app.voice.stt_service: Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+2026-05-03 00:49:49,759 [INFO] faster_whisper: Processing audio with duration 00:01.728
+2026-05-03 00:49:49,769 [INFO] faster_whisper: VAD filter removed 00:01.728 of audio
+2026-05-03 00:49:49,772 [INFO] faster_whisper: Processing audio with duration 00:01.728

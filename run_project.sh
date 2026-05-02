@@ -16,9 +16,9 @@ fi
 
 case "$ACTION" in
     start)
-        echo "Launching Friday Tahoe Edition..."
+        echo "Launching Friday Tahoe Edition (Desktop)..."
         # Run in background and disown to persist after terminal closure
-        nohup "$FRIDAY_BIN" > /dev/null 2>&1 &
+        nohup "$FRIDAY_BIN" > "$SCRIPT_DIR/logs/menubar.log" 2>&1 &
         echo "Friday is now running in your Menu Bar. Look for the Orb!"
         ;;
     stop)

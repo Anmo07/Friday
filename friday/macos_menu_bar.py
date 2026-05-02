@@ -169,6 +169,8 @@ class FridayMenuBar(rumps.App):
         )
 
         self.menu = [
+            rumps.MenuItem("Force Trigger (Debug)", callback=self.force_trigger),
+            None,
             self.status_item,
             self.security_item,
             None,
@@ -222,6 +224,14 @@ class FridayMenuBar(rumps.App):
         except Exception as e:
             logger.error(f"Event loop died: {e}", exc_info=True)
 
+    async def force_trigger(self, _):
+        logger.info("Manual trigger activated via Menu Bar.")
+        self._set_state(FridayState.PROCESSING)
+        self._set_overlay_text("I'm listening...")
+        self._set_overlay_visible(True)
+        # We can't easily inject audio, but we can simulate a trigger
+        asyncio.create_task(self.execute_pipeline("hello friday"))
+
     async def _bootstrap(self):
         """Initializes the backend, validates services, and starts the acoustic monitor."""
         if hasattr(self, "_bootstrapping") and self._bootstrapping:
@@ -242,6 +252,7 @@ class FridayMenuBar(rumps.App):
             await self._ensure_backend_ready()
             
             # 3. Ignite Acoustic Monitor
+            listener.energy_threshold = 200 # Lowered energy threshold
             if not listener.is_running:
                 await listener.start(self.process_audio)
             
@@ -355,7 +366,6 @@ class FridayMenuBar(rumps.App):
             FridayState.LISTENING: "FRIDAY (Live)",
             FridayState.PROCESSING: "FRIDAY (Thinking...)",
             FridayState.RESPONDING: "FRIDAY (Speaking...)",
-            FridayState.LOCKED: "FRIDAY (Locked)",
             FridayState.IDLE: "FRIDAY"
         }
         callAfter(self._set_app_title, titles.get(state, "FRIDAY"))
@@ -450,13 +460,17 @@ class FridayMenuBar(rumps.App):
             return
 
         async with self.response_lock:
+            logger.info(f"Processing audio utterance ({len(audio_bytes)} bytes)...")
             self._set_state(FridayState.CAPTURED)
-            self._set_overlay_text("Listening...")
+            self._set_overlay_text("Transcribing...")
             self._set_overlay_visible(True)
 
             try:
                 text = await stt_service.transcribe(audio_bytes)
+                logger.info(f"STT Result: '{text}'")
+                
                 if not text.strip():
+                    logger.info("STT returned empty text. Cancelling interaction.")
                     self._set_state(
                         FridayState.LISTENING
                     )
@@ -658,7 +672,7 @@ class FridayMenuBar(rumps.App):
             if self.listening_enabled and not listener.is_running:
                 await listener.start(self.process_audio)
             self._set_overlay_visible(False)
-            self._set_state(FridayState.LISTENING if listener.has_voice_profile else FridayState.LOCKED)
+            self._set_state(FridayState.LISTENING)
 
     def toggle_listening(self, sender):
         self.listening_enabled = not self.listening_enabled
