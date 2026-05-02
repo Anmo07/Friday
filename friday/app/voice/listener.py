@@ -1,8 +1,18 @@
 import asyncio
 import logging
+import time
 import struct
 import math
+import os
+import numpy as np
 from typing import Optional, Callable, Awaitable
+
+try:
+    import torch
+    from funasr import AutoModel
+except ImportError:
+    torch = None
+    AutoModel = None
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +34,73 @@ class VoiceListener:
         self._callback: Optional[Callable[[bytes], Awaitable]] = None
         self._ambient_energy = 0.0
         self.current_rms = 0.0
+        self.current_peak = 0.0
+        self.ambient_peak_rolling = energy_threshold
         self.ambient_rms_rolling = energy_threshold
+
+        # Speaker Verification State
+        self.profile_path = os.path.expanduser("~/.friday/user_voice_profile.pt")
+        self.user_embedding = None
+        self.sv_model = None
+        self.ambient_rms_rolling = energy_threshold
+        self._load_user_profile()
+
+    def _load_user_profile(self):
+        """Loads the authorized user's voice embedding."""
+        if os.path.exists(self.profile_path):
+            try:
+                self.user_embedding = torch.load(self.profile_path)
+                logger.info(f"Authorized voice profile loaded from {self.profile_path}")
+            except Exception as e:
+                logger.error(f"Failed to load voice profile: {e}")
+
+    def _init_sv_model(self):
+        """Lazy-load the Fun-ASR Speaker Verification model."""
+        if self.sv_model is None and AutoModel is not None:
+            logger.info("Initializing Fun-ASR CAM++ Speaker Verification Model (speech_campplus_sv_en_16k_common)...")
+            self.sv_model = AutoModel(model="damo/speech_campplus_sv_en_16k_common", device="cpu")
+
+    async def verify_speaker(self, audio_bytes: bytes) -> bool:
+        """Compares current audio against the authorized embedding."""
+        if self.user_embedding is None:
+            logger.warning("No voice profile found. Verification skipped (Security Gap).")
+            return True
+        
+        # Load model if needed
+        await asyncio.to_thread(self._init_sv_model)
+        
+        try:
+            # Convert PCM to float32 for model consumption
+            audio_np = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
+            res = await asyncio.to_thread(self.sv_model.generate, input=audio_np, sample_rate=16000)
+            current_emb = torch.tensor(res[0]['spk_embedding'])
+            
+            # Cosine Similarity check
+            similarity = torch.nn.functional.cosine_similarity(current_emb.unsqueeze(0), self.user_embedding.unsqueeze(0)).item()
+            logger.info(f"Speaker Verification Score: {similarity:.4f}")
+            
+            # Optimized threshold for far-field/noise: 0.25 - 0.30
+            return similarity > 0.28
+        except Exception as e:
+            logger.error(f"Verification error: {e}")
+            return False
+
+    async def capture_user_profile(self, duration: int = 5):
+        """Capture reference embedding from microphone."""
+        import sounddevice as sd
+        logger.info(f"Recording {duration}s of voice for profile... Please speak clearly.")
+        recording = await asyncio.to_thread(
+            sd.rec, int(duration * 16000), samplerate=16000, channels=1, dtype='int16', blocking=True
+        )
+        
+        await asyncio.to_thread(self._init_sv_model)
+        audio_np = recording.flatten().astype(np.float32) / 32768.0
+        res = await asyncio.to_thread(self.sv_model.generate, input=audio_np, sample_rate=16000)
+        self.user_embedding = torch.tensor(res[0]['spk_embedding'])
+        
+        os.makedirs(os.path.dirname(self.profile_path), exist_ok=True)
+        torch.save(self.user_embedding, self.profile_path)
+        logger.info(f"Voice profile saved to {self.profile_path}")
 
     async def calibrate(self, duration: float = 1.0):
         """Sample ambient noise to set a baseline energy threshold"""
@@ -103,48 +179,73 @@ class VoiceListener:
 
         # Neural Monitor State
         self.current_rms = 0.0
-        self.ambient_rms_rolling = self.energy_threshold
+        self.current_peak = 0.0
+        self.ambient_peak_rolling = self.energy_threshold
         last_clap_time = 0
         audio_buffer = []
 
+        hw_sample_rate = int(sd.query_devices(kind='input')['default_samplerate'])
+        logger.info(f"Opening hardware stream at {hw_sample_rate}Hz...")
+
+        def resample(data, input_rate, output_rate):
+            import numpy as np
+            if input_rate == output_rate: return data
+            duration = len(data) / input_rate
+            output_len = int(duration * output_rate)
+            return np.interp(np.linspace(0, duration, output_len), np.linspace(0, duration, len(data)), data).astype(np.int16)
+
         try:
-            with sd.InputStream(samplerate=self.sample_rate, channels=1, dtype='int16', 
+            with sd.InputStream(samplerate=hw_sample_rate, channels=1, dtype='int16', 
                               blocksize=self.chunk_size, callback=audio_callback):
-                logger.info("InputStream active. Acoustic monitor live.")
+                logger.info("InputStream active. Waiting for Double Clap or 'Hey Friday'...")
                 while self._running:
-                    audio_chunk = await queue.get()
+                    raw_chunk = await queue.get()
+                    audio_chunk = resample(raw_chunk.flatten(), hw_sample_rate, self.sample_rate)
                     audio_bytes = audio_chunk.tobytes()
+                    
+                    # 1. PEAK DETECTION for Transients (Claps)
+                    # Claps are sharp spikes, RMS blurs them. Peak captures them.
+                    self.current_peak = np.max(np.abs(raw_chunk))
                     self.current_rms = self._calculate_rms(audio_bytes)
                     
-                    # Update rolling ambient floor (slowly follow silence)
-                    if self.current_rms < self.energy_threshold:
-                        self.ambient_rms_rolling = self.ambient_rms_rolling * 0.95 + self.current_rms * 0.05
+                    if self.current_peak < self.energy_threshold * 2:
+                        self.ambient_peak_rolling = self.ambient_peak_rolling * 0.98 + self.current_peak * 0.02
 
-                    # Rolling buffer for wake word
                     audio_buffer.append(audio_bytes)
-                    if len(audio_buffer) > 20: audio_buffer.pop(0)
+                    if len(audio_buffer) > 25: audio_buffer.pop(0) # ~1.5s buffer
 
-                    # 1. Improved Double Clap Detection
-                    # Look for spikes at least 3x the current rolling ambient floor
-                    if self.current_rms > self.ambient_rms_rolling * 3.5:
+                    # Double Clap Logic: Peak must be 4x the rolling ambient peak
+                    if self.current_peak > self.ambient_peak_rolling * 4.0:
                         now = time.time()
-                        if 0.1 < (now - last_clap_time) < 0.7:
-                            logger.info(f"Double Clap Detected (RMS: {self.current_rms:.0f}). Activating...")
-                            full_audio = await self._capture_utterance_from_queue(queue, b"")
-                            if full_audio and self._callback: await self._callback(full_audio)
+                        if 0.08 < (now - last_clap_time) < 0.8:
+                            logger.info(f"Double Clap Triggered! (Peak: {self.current_peak:.0f})")
+                            
+                            # Verification before capture
+                            trigger_audio = b"".join(audio_buffer)
+                            if await self.verify_speaker(trigger_audio):
+                                full_audio = await self._capture_utterance_from_queue(queue, b"", hw_rate=hw_sample_rate)
+                                if full_audio and self._callback: await self._callback(full_audio)
+                            else:
+                                logger.info("Unauthorized clap or transient rejected.")
+                            
                             last_clap_time = 0
                         else:
                             last_clap_time = now
-                        # Skip wake word check if we're processing a clap
                         continue
 
-                    # 2. Continuous Wake Word Verification
-                    # Trigger STT only if energy is significantly above ambient
-                    if self.current_rms > self.ambient_rms_rolling * 1.5 and len(audio_buffer) >= 8:
-                        if await self._is_wake_word(b"".join(audio_buffer)):
-                            logger.info(f"Wake Word Detected (RMS: {self.current_rms:.0f}).")
-                            full_audio = await self._capture_utterance_from_queue(queue, b"")
-                            if full_audio and self._callback: await self._callback(full_audio)
+                    # 2. Wake Word Logic: RMS-based
+                    if self.current_rms > self.energy_threshold and len(audio_buffer) >= 10:
+                        trigger_audio = b"".join(audio_buffer)
+                        if await self._is_wake_word(trigger_audio):
+                            logger.info(f"Voice Trigger: 'Friday' detected.")
+                            
+                            # Verification gate
+                            if await self.verify_speaker(trigger_audio):
+                                full_audio = await self._capture_utterance_from_queue(queue, b"", hw_rate=hw_sample_rate)
+                                if full_audio and self._callback: await self._callback(full_audio)
+                            else:
+                                logger.info("Unauthorized speaker rejected.")
+                            
                             audio_buffer = [] 
                     
                     await asyncio.sleep(0.01)
@@ -170,31 +271,32 @@ class VoiceListener:
         # Look for variations of the wake word
         return any(w in text for w in ["friday", "hey friday", "hi friday", "ready friday"])
 
-    async def _capture_utterance_from_queue(self, queue: asyncio.Queue, initial_chunk: bytes, is_wake_clapped=False) -> Optional[bytes]:
+    async def _capture_utterance_from_queue(self, queue: asyncio.Queue, initial_chunk: bytes, hw_rate: int = 16000) -> Optional[bytes]:
         chunks = [initial_chunk] if initial_chunk else []
         silence_count = 0
         from core.pipeline import FridayPipeline
         from app.voice.stt_service import stt_service
+        import numpy as np
         pipeline = FridayPipeline()
         
-        # If clapped, we start fresh. If wake-word, we already have some audio.
-        max_duration_chunks = int(12.0 * self.sample_rate / self.chunk_size)
-        transcription_buffer = ""
+        def resample(data, input_rate, output_rate):
+            if input_rate == output_rate: return data
+            duration = len(data) / input_rate
+            output_len = int(duration * output_rate)
+            return np.interp(np.linspace(0, duration, output_len), np.linspace(0, duration, len(data)), data).astype(np.int16)
+
+        max_duration_chunks = int(12.0 * hw_rate / self.chunk_size)
         
         for i in range(max_duration_chunks):
             if not self._running: break
             try:
-                audio_chunk = await asyncio.wait_for(queue.get(), timeout=1.0)
+                raw_chunk = await asyncio.wait_for(queue.get(), timeout=1.0)
+                # Resample each chunk to 16k
+                audio_chunk = resample(raw_chunk.flatten(), hw_rate, self.sample_rate)
                 audio_bytes = audio_chunk.tobytes()
                 chunks.append(audio_bytes)
                 
-                if i > 0 and i % 20 == 0:
-                    transcription_buffer = await stt_service.transcribe(b"".join(chunks))
-                
-                if len(transcription_buffer.strip()) > 5:
-                    if await pipeline.turn_detector.predict_end_of_thought(audio_bytes, transcription_buffer):
-                        break
-                
+                # Check for end of thought
                 rms = self._calculate_rms(audio_bytes)
                 if rms < self.energy_threshold * 0.4:
                     silence_count += 1

@@ -1,148 +1,218 @@
 #!/usr/bin/env python3
-"""Enhanced macOS menu bar launcher for FRIDAY with status monitoring."""
-
-from __future__ import annotations
-
-import subprocess
-from pathlib import Path
+import asyncio
+import sys
+import json
 import threading
+import tempfile
+import os
 import time
+import httpx
+import logging
+from pathlib import Path
+from enum import Enum
+
+# Determine directories
+ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT))
 
 import rumps
+from AppKit import (
+    NSWindow, NSView, NSColor, NSBackingStoreBuffered, NSScreen, NSImage, NSImageView,
+    NSWindowStyleMaskBorderless, NSFont, NSTextField, NSTextAlignmentCenter,
+    NSVisualEffectView, NSVisualEffectMaterialDark, NSVisualEffectBlendingModeBehindWindow,
+    NSWindowLevel, NSAnimationContext, NSFontWeightMedium
+)
 
-ROOT = Path(__file__).resolve().parent
-RUNNER = ROOT / "run_project.sh"
-ICON_PATH = ROOT / "resources" / "icons" / "friday_icon.png"
+from friday.core.pipeline import FridayPipeline
+from friday.core.startup_validation import validate_startup
 
+# Configure Logging
+log_dir = ROOT / "logs"
+log_dir.mkdir(exist_ok=True)
+logging.basicConfig(filename=str(log_dir / "menubar.log"), level=logging.INFO)
 
-def _run(action: str) -> str:
-    """Run an action and return output."""
-    try:
-        result = subprocess.run(
-            [str(RUNNER), action],
-            cwd=str(ROOT),
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        return result.stdout.strip() or result.stderr.strip() or "Done"
-    except subprocess.TimeoutExpired:
-        return "Timeout"
-    except Exception as e:
-        return f"Error: {e}"
+class FridayState(Enum):
+    IDLE = "IDLE"
+    LISTENING = "LISTENING"
+    CAPTURED = "CAPTURED"
+    PROCESSING = "PROCESSING"
+    RESPONDING = "RESPONDING"
 
+class SiriResponseWindow(NSWindow):
+    """Floating Siri-style overlay with Glassmorphism."""
+    def initWithContentRect_styleMask_backing_defer_(self, rect, style, backing, defer):
+        self = super().initWithContentRect_styleMask_backing_defer_(rect, style, backing, defer)
+        if self:
+            self.setOpaque_(False)
+            self.setBackgroundColor_(NSColor.clearColor())
+            self.setLevel_(NSWindowLevel + 1)
+            self.setHasShadow_(True)
+            self.setIgnoresMouseEvents_(True)
+            
+            # Visual Effect (Blur)
+            self.blur = NSVisualEffectView.alloc().init()
+            self.blur.setMaterial_(NSVisualEffectMaterialDark)
+            self.blur.setBlendingMode_(NSVisualEffectBlendingModeBehindWindow)
+            self.blur.setWantsLayer_(True)
+            self.blur.layer().setCornerRadius_(25.0)
+            self.setContentView_(self.blur)
+            
+            # Reactive Text Label
+            self.label = NSTextField.alloc().initWithFrame_(((20, 20), (360, 100)))
+            self.label.setEditable_(False)
+            self.label.setSelectable_(False)
+            self.label.setBordered_(False)
+            self.label.setDrawsBackground_(False)
+            self.label.setTextColor_(NSColor.whiteColor())
+            self.label.setFont_(NSFont.systemFontOfSize_weight_(18, NSFontWeightMedium))
+            self.label.setAlignment_(NSTextAlignmentCenter)
+            self.label.setStringValue_("")
+            self.blur.addSubview_(self.label)
+            
+        return self
 
 class FridayMenuBar(rumps.App):
-    def __init__(self) -> None:
-        # Set the icon
-        super().__init__(
-            name="FRIDAY",
-            title="FRIDAY",
-            icon=str(ICON_PATH),
-            menu=[
-                "Start",
-                "Stop",
-                "Restart",
-                "Status",
-                "Mode: Docker",
-                None,
-                "Open UI",
-                "Show Logs",
-                None,
-                "About",
-                None,
-                "Quit",
-            ],
+    def __init__(self):
+        icon_path = ROOT / "friday" / "assets" / "orb_icon_processed.png"
+        super().__init__("FRIDAY", icon=str(icon_path) if icon_path.exists() else None)
+        
+        self.state = FridayState.IDLE
+        self.pipeline = FridayPipeline()
+        self.loop = asyncio.new_event_loop()
+        self.listening = True
+        
+        self.menu = [
+            "Neural Status: Active",
+            None,
+            rumps.MenuItem("Capture Voice Profile", callback=self.enroll_voice),
+            rumps.MenuItem("Reset Neural Context", callback=self.clear_memory),
+            None,
+            "Quit"
+        ]
+        
+        self._setup_native_overlay()
+        
+        # Start backend thread
+        self.bg_thread = threading.Thread(target=self.start_backend)
+        self.bg_thread.daemon = True
+        self.bg_thread.start()
+
+    def _setup_native_overlay(self):
+        screen = NSScreen.mainScreen().visibleFrame()
+        sw, sh = screen.size.width, screen.size.height
+        
+        width, height = 400, 140
+        rect = ((sw/2 - width/2, 100), (width, height))
+        
+        self.window = SiriResponseWindow.alloc().initWithContentRect_styleMask_backing_defer_(
+            rect, NSWindowStyleMaskBorderless, NSBackingStoreBuffered, False
         )
-        self.tooltip = "FRIDAY AI Assistant"
-        self._mode = "docker"
-        self._status = "stopped"
-        self._update_status()
-        # Start a thread to periodically update status
-        self._timer = threading.Timer(5.0, self._update_status_loop)
-        self._timer.daemon = True
-        self._timer.start()
+        
+        self.orb_view = NSImageView.alloc().initWithFrame_(((width/2 - 40, 60), (80, 80)))
+        icon_path = ROOT / "friday" / "assets" / "orb_icon_processed.png"
+        if icon_path.exists():
+            img = NSImage.alloc().initByReferencingFile_(str(icon_path))
+            self.orb_view.setImage_(img)
+        
+        self.window.contentView().addSubview_(self.orb_view)
+        self.window.setAlphaValue_(0.0)
+        self.window.orderFrontRegardless()
 
-    def _update_status_loop(self) -> None:
-        self._update_status()
-        self._timer = threading.Timer(5.0, self._update_status_loop)
-        self._timer.daemon = True
-        self._timer.start()
-
-    def _update_status(self) -> None:
+    def start_backend(self):
         try:
-            output = _run("status")
-            if "running" in output.lower() or "up" in output.lower():
-                self._status = "running"
-                self.title = "FRIDAY ●"
+            asyncio.run(validate_startup())
+            asyncio.set_event_loop(self.loop)
+            self.start_acoustic_monitor()
+            self.loop.run_forever()
+        except Exception as e:
+            logging.error(f"Backend Crash: {e}")
+
+    def start_acoustic_monitor(self):
+        from friday.app.voice.listener import listener
+        async def run_listener():
+            try:
+                self.state = FridayState.LISTENING
+                await listener.start(self.process_audio)
+                while True: await asyncio.sleep(1)
+            except Exception as e:
+                logging.error(f"Monitor error: {e}")
+        asyncio.run_coroutine_threadsafe(run_listener(), self.loop)
+
+    async def process_audio(self, audio_bytes: bytes):
+        if not self.listening: return
+        self.state = FridayState.CAPTURED
+        try:
+            from friday.app.voice.stt_service import stt_service
+            text = await stt_service.transcribe(audio_bytes)
+            if text and text.strip():
+                await self.execute_pipeline(text)
             else:
-                self._status = "stopped"
-                self.title = "FRIDAY ○"
-        except Exception:
-            self._status = "unknown"
-            self.title = "FRIDAY ?"
+                self.state = FridayState.LISTENING
+        except Exception as e:
+            self.state = FridayState.LISTENING
 
-    @rumps.clicked("Start")
-    def start(self, _: object) -> None:
-        output = _run("start")
-        rumps.notification("FRIDAY", "Starting", output[:100])
-        self._update_status()
+    async def execute_pipeline(self, text: str):
+        self.state = FridayState.PROCESSING
+        self.window.animator().setAlphaValue_(1.0)
+        self.window.label.setStringValue_("Thinking...")
+        
+        try:
+            from friday.app.voice.tts_service import tts_service
+            full_response, current_sentence = "", ""
+            audio_queue = asyncio.Queue()
 
-    @rumps.clicked("Stop")
-    def stop(self, _: object) -> None:
-        output = _run("stop")
-        rumps.notification("FRIDAY", "Stopping", output[:100])
-        self._update_status()
+            async def audio_worker():
+                while True:
+                    sentence = await audio_queue.get()
+                    if sentence is None: break
+                    audio_res = await tts_service.get_audio(sentence.strip())
+                    if audio_res:
+                        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
+                            tmp.write(audio_res); tmp_p = tmp.name
+                        self.state = FridayState.RESPONDING
+                        proc = await asyncio.create_subprocess_exec("afplay", tmp_p)
+                        await proc.wait(); os.unlink(tmp_p)
+                    audio_queue.task_done()
 
-    @rumps.clicked("Restart")
-    def restart(self, _: object) -> None:
-        _run("stop")
-        _run("start")
-        rumps.notification("FRIDAY", "Restarting", "Services restarted.")
-        self._update_status()
+            worker = asyncio.create_task(audio_worker())
+            
+            self.window.label.setStringValue_("")
+            async for chunk in self.pipeline.stream_run(text, voice_mode=True):
+                if chunk.startswith("event: token"):
+                    data = json.loads(chunk.split("data: ")[1])
+                    token = data.get("t", "")
+                    full_response += token; current_sentence += token
+                    
+                    self.window.label.setStringValue_(full_response)
+                    
+                    if any(p in current_sentence for p in [". ", "! ", "? "]):
+                        parts = current_sentence.split(". ", 1)
+                        await audio_queue.put(parts[0] + ". ")
+                        current_sentence = parts[1] if len(parts) > 1 else ""
+            
+            if current_sentence.strip(): await audio_queue.put(current_sentence)
+            await audio_queue.put(None); await worker
+        except Exception as e:
+            logging.error(f"Pipeline Error: {e}")
+        finally:
+            await asyncio.sleep(2.0)
+            self.state = FridayState.LISTENING
+            self.window.animator().setAlphaValue_(0.0)
 
-    @rumps.clicked("Status")
-    def status(self, _: object) -> None:
-        output = _run("status")
-        rumps.alert("FRIDAY Status", message=output[:1200] or "No output")
+    def enroll_voice(self, _):
+        from friday.app.voice.listener import listener
+        async def _enroll():
+            self.window.animator().setAlphaValue_(1.0)
+            self.window.label.setStringValue_("Recording voice profile... speak now.")
+            await listener.capture_user_profile(duration=5)
+            self.window.label.setStringValue_("Profile captured. Friday is now secured.")
+            await asyncio.sleep(2)
+            self.window.animator().setAlphaValue_(0.0)
+        asyncio.run_coroutine_threadsafe(_enroll(), self.loop)
 
-    @rumps.clicked("Mode: Docker")
-    def toggle_mode(self, _: object) -> None:
-        self._mode = "local" if self._mode == "docker" else "docker"
-        # Update menu title
-        for i, item in enumerate(self.menu):
-            if item.title == "Mode: Docker" or item.title == "Mode: Local":
-                self.menu[i].title = f"Mode: {self._mode.capitalize()}"
-                break
-        rumps.notification("FRIDAY", f"Mode switched to {self._mode}", f"Will use {self._mode} on next start/restart.")
-
-    @rumps.clicked("Open UI")
-    def open_ui(self, _: object) -> None:
-        _run("open")
-        rumps.notification("FRIDAY", "UI", "Opening http://localhost:3000")
-
-    @rumps.clicked("Show Logs")
-    def show_logs(self, _: object) -> None:
-        script = f'tell application "Terminal" to do script "cd \\"{ROOT}\\" && ./run_project.sh logs"'
-        subprocess.run(["osascript", "-e", script], check=False)
-        rumps.notification("FRIDAY", "Logs", "Opening logs in Terminal")
-
-    @rumps.clicked("About")
-    def about(self, _: object) -> None:
-        about_text = (
-            "FRIDAY AI Assistant v0.2.0\n"
-            "Enhanced with memory, emotion, cross-app integration & more.\n"
-            "© 2026 Friday Project\n"
-            "https://github.com/Anmo07/Friday"
-        )
-        rumps.alert("About FRIDAY", message=about_text)
-
-    @rumps.clicked("Quit")
-    def quit_app(self, _: object) -> None:
-        # Stop the timer
-        self._timer.cancel()
-        rumps.quit_application()
-
+    def clear_memory(self, _):
+        self.pipeline.reset_memory()
+        rumps.notification("Friday", "Neural Context Reset", "Memory cleared.")
 
 if __name__ == "__main__":
     FridayMenuBar().run()

@@ -26,9 +26,16 @@ for logger_name in ["semantic_router", "transformers", "huggingface_hub", "httpc
 warnings.filterwarnings("ignore")
 
 import rumps
-from AppKit import NSWindow, NSView, NSColor, NSBackingStoreBuffered, NSScreen, NSImage, NSImageView, NSWindowStyleMaskBorderless, NSLayoutAttributeCenterX, NSLayoutAttributeCenterY, NSLayoutConstraint
+from AppKit import (
+    NSWindow, NSView, NSColor, NSBackingStoreBuffered, NSScreen, NSImage, NSImageView,
+    NSWindowStyleMaskBorderless, NSLayoutAttributeCenterX, NSLayoutAttributeCenterY, 
+    NSLayoutConstraint, NSFont, NSTextField, NSTextAlignmentCenter,
+    NSVisualEffectView, NSVisualEffectMaterialDark, NSVisualEffectBlendingModeBehindWindow,
+    NSWindowLevel, NSAnimationContext, NSFontWeightMedium
+)
 from core.pipeline import FridayPipeline
 from core.startup_validation import validate_startup
+import httpx
 
 class FridayState(Enum):
     IDLE = "IDLE"
@@ -40,6 +47,39 @@ class FridayState(Enum):
 class FridayOverlayView(NSView):
     def drawRect_(self, rect):
         pass # Animation handled by layer
+
+class SiriResponseWindow(NSWindow):
+    """Floating Siri-style overlay with Glassmorphism."""
+    def initWithContentRect_styleMask_backing_defer_(self, rect, style, backing, defer):
+        self = super().initWithContentRect_styleMask_backing_defer_(rect, style, backing, defer)
+        if self:
+            self.setOpaque_(False)
+            self.setBackgroundColor_(NSColor.clearColor())
+            self.setLevel_(3) # Topmost
+            self.setHasShadow_(True)
+            self.setIgnoresMouseEvents_(True)
+            
+            # Visual Effect (Blur)
+            self.blur = NSVisualEffectView.alloc().init()
+            self.blur.setMaterial_(NSVisualEffectMaterialDark)
+            self.blur.setBlendingMode_(NSVisualEffectBlendingModeBehindWindow)
+            self.blur.setWantsLayer_(True)
+            self.blur.layer().setCornerRadius_(25.0)
+            self.setContentView_(self.blur)
+            
+            # Reactive Text Label
+            self.label = NSTextField.alloc().initWithFrame_(((20, 20), (360, 100)))
+            self.label.setEditable_(False)
+            self.label.setSelectable_(False)
+            self.label.setBordered_(False)
+            self.label.setDrawsBackground_(False)
+            self.label.setTextColor_(NSColor.whiteColor())
+            self.label.setFont_(NSFont.systemFontOfSize_weight_(18, NSFontWeightMedium))
+            self.label.setAlignment_(NSTextAlignmentCenter)
+            self.label.setStringValue_("")
+            self.blur.addSubview_(self.label)
+            
+        return self
 
 class FridayMenuBarApp(rumps.App):
     def __init__(self):
@@ -61,6 +101,7 @@ class FridayMenuBarApp(rumps.App):
             self.status_item,
             self.signal_item,
             None,
+            rumps.MenuItem("Capture Voice Profile", callback=self.enroll_voice),
             rumps.MenuItem("Start at Login", callback=self.toggle_login_item),
             rumps.MenuItem("Pause Acoustic Monitor", callback=self.toggle_listening),
             rumps.MenuItem("Reset Neural Context", callback=self.clear_memory),
@@ -89,27 +130,25 @@ class FridayMenuBarApp(rumps.App):
         self.bg_thread.start()
 
     def _setup_native_overlay(self):
-        screen = NSScreen.mainScreen().frame()
+        screen = NSScreen.mainScreen().visibleFrame()
         sw, sh = screen.size.width, screen.size.height
         
-        # Circular window
-        rect = ((sw - 160, 40), (120, 120))
-        self.window = NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
+        # Siri Window: Bottom center positioning
+        width, height = 400, 140
+        rect = ((sw/2 - width/2, 100), (width, height))
+        
+        self.window = SiriResponseWindow.alloc().initWithContentRect_styleMask_backing_defer_(
             rect, NSWindowStyleMaskBorderless, NSBackingStoreBuffered, False
         )
-        self.window.setOpaque_(False)
-        self.window.setBackgroundColor_(NSColor.clearColor())
-        self.window.setHasShadow_(True)
-        self.window.setLevel_(3) # Topmost
         
-        # Content view with Orb
-        self.view = NSImageView.alloc().init()
+        # Content view with Orb (overlayed on blur)
+        self.orb_view = NSImageView.alloc().initWithFrame_(((width/2 - 40, 60), (80, 80)))
         icon_path = os.path.join(PACKAGE_DIR, "assets", "orb_icon_processed.png")
         if os.path.exists(icon_path):
             img = NSImage.alloc().initByReferencingFile_(icon_path)
-            self.view.setImage_(img)
+            self.orb_view.setImage_(img)
         
-        self.window.setContentView_(self.view)
+        self.window.contentView().addSubview_(self.orb_view)
         self.window.setAlphaValue_(0.0)
         self.window.orderFrontRegardless()
 
@@ -141,6 +180,7 @@ class FridayMenuBarApp(rumps.App):
             asyncio.run(validate_startup())
             asyncio.set_event_loop(self.loop)
             _ = self.pipeline
+            
             self.start_acoustic_monitor()
             self.loop.run_forever()
         except Exception as e:
@@ -175,6 +215,9 @@ class FridayMenuBarApp(rumps.App):
 
     async def execute_pipeline(self, text: str):
         self.state = FridayState.PROCESSING
+        self.window.animator().setAlphaValue_(1.0)
+        self.window.label.setStringValue_("Thinking...")
+        
         try:
             from app.voice.tts_service import tts_service
             full_response, current_sentence = "", ""
@@ -194,11 +237,18 @@ class FridayMenuBarApp(rumps.App):
                     audio_queue.task_done()
 
             worker = asyncio.create_task(audio_worker())
+            
+            # SSE Stream Client Integration
+            self.window.label.setStringValue_("")
             async for chunk in self.pipeline.stream_run(text, voice_mode=True):
                 if chunk.startswith("event: token"):
                     data = json.loads(chunk.split("data: ")[1])
                     token = data.get("t", "")
                     full_response += token; current_sentence += token
+                    
+                    # Update Siri UI Word-by-Word
+                    self.window.label.setStringValue_(full_response)
+                    
                     if any(p in current_sentence for p in [". ", "! ", "? "]):
                         parts = current_sentence.split(". ", 1)
                         await audio_queue.put(parts[0] + ". ")
@@ -206,10 +256,24 @@ class FridayMenuBarApp(rumps.App):
             
             if current_sentence.strip(): await audio_queue.put(current_sentence)
             await audio_queue.put(None); await worker
-        except Exception as e: logging.error(f"Pipeline Error: {e}")
+        except Exception as e: 
+            logging.error(f"Pipeline Error: {e}")
+            self.window.label.setStringValue_(f"Error: {str(e)[:50]}")
         finally:
+            await asyncio.sleep(2.0)
             self.state = FridayState.LISTENING
-            self._update_ui(False)
+            self.window.animator().setAlphaValue_(0.0)
+
+    def enroll_voice(self, _):
+        from app.voice.listener import listener
+        async def _enroll():
+            self.window.animator().setAlphaValue_(1.0)
+            self.window.label.setStringValue_("Recording voice profile... speak now.")
+            await listener.capture_user_profile(duration=5)
+            self.window.label.setStringValue_("Profile captured. Friday is now secured.")
+            await asyncio.sleep(2)
+            self.window.animator().setAlphaValue_(0.0)
+        asyncio.run_coroutine_threadsafe(_enroll(), self.loop)
 
     def toggle_listening(self, sender):
         self.listening = not self.listening
