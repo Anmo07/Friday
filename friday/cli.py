@@ -4,42 +4,40 @@ import json
 import threading
 import tempfile
 import os
-import subprocess
 import warnings
 import time
 from enum import Enum
-from typing import Optional
+from typing import Optional, List, Tuple
+from datetime import datetime
 
-# Add project root to sys.path to resolve sibling packages
-# This ensures that imports like 'core', 'app', 'models' work regardless of where it's launched from
-current_dir = os.path.dirname(os.path.abspath(__file__))
-if current_dir not in sys.path:
-    sys.path.insert(0, current_dir)
-
-os.environ["TRANSFORMERS_VERBOSITY"] = "error"
-os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+# Determine directories
+PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(PACKAGE_DIR)
+sys.path.insert(0, PACKAGE_DIR)
+sys.path.insert(0, PROJECT_ROOT)
 
 import logging
-logging.getLogger("semantic_router").setLevel(logging.ERROR)
-logging.getLogger("transformers").setLevel(logging.ERROR)
-logging.getLogger("urllib3").setLevel(logging.ERROR)
+log_dir = os.path.join(PROJECT_ROOT, "logs")
+os.makedirs(log_dir, exist_ok=True)
+logging.basicConfig(filename=os.path.join(log_dir, "friday.log"), level=logging.INFO)
 
-warnings.filterwarnings("ignore", category=UserWarning, module="langchain_core")
-warnings.filterwarnings("ignore", category=UserWarning, module="pydantic")
+for logger_name in ["semantic_router", "transformers", "huggingface_hub", "httpcore", "httpx"]:
+    logging.getLogger(logger_name).setLevel(logging.ERROR)
+
 warnings.filterwarnings("ignore")
 
 from rich.console import Console
 from rich.panel import Panel
-from rich.markdown import Markdown
 from rich.live import Live
 from rich.text import Text
-from rich.status import Status
+from rich.table import Table
+from rich.align import Align
+from rich.theme import Theme
 
-console = Console()
+console = Console(theme=Theme({"friday": "bold cyan", "user": "bold purple"}))
 
 from core.pipeline import FridayPipeline
 from core.startup_validation import validate_startup
-from core.service_registry import service_registry
 
 class FridayState(Enum):
     IDLE = "IDLE"
@@ -50,329 +48,167 @@ class FridayState(Enum):
 
 class FridayMenuApp:
     def __init__(self):
-        # rumps might not be available in all environments, but we keep it for Mac focus
-        try:
-            import rumps
-            self.has_gui = True
-        except ImportError:
-            self.has_gui = False
-            
         self.state = FridayState.IDLE
         self.layer = FridayPipeline()
         self.loop = asyncio.new_event_loop()
         self.listening = True
-        self.current_task = None
-        self.current_proc = None
-        self.processing_status = None
+        self.history: List[Tuple[str, str]] = []
+        self.score = 0
+        self._game_state = {"pos": 0, "obstacles": [], "tick": 0}
         
-        if self.has_gui:
-            import rumps
-            self.app = rumps.App("FRIDAY", icon=None, quit_button="Quit FRIDAY")
-            self.app.title = "🤖"
-            self.status_menu = rumps.MenuItem("Status: Active", callback=None)
-            self.toggle_mic_menu = rumps.MenuItem("Pause Listening", callback=self.toggle_mic)
-            self.clear_mem_menu = rumps.MenuItem("Clear Context Memory", callback=self.clear_memory)
-            self.open_dash_menu = rumps.MenuItem("Open Assistant Dashboard", callback=self.open_dashboard)
-            self.open_ctrl_menu = rumps.MenuItem("Open Control Room", callback=self.open_control_room)
-            self.app.menu = [
-                self.status_menu,
-                None,
-                self.toggle_mic_menu,
-                self.clear_mem_menu,
-                None,
-                self.open_dash_menu,
-                self.open_ctrl_menu,
-                None,
-            ]
-        
-        t = threading.Thread(target=self.start_background_loop)
+        t = threading.Thread(target=self.start_backend)
         t.daemon = True
         t.start()
 
-    def _run_async_loop(self):
-        asyncio.set_event_loop(self.loop)
-        self.loop.run_forever()
-
-    def start_background_loop(self):
+    def start_backend(self):
         try:
-            with console.status("[bold cyan]Initializing FRIDAY...", spinner="dots"):
-                # Run startup validation
-                valid = asyncio.run(validate_startup())
-                if not valid:
-                    console.print("[bold red]Startup validation failed. Please check Ollama and models.[/bold red]")
-                    # We continue but in limited mode
-                
-                asyncio.set_event_loop(self.loop)
-                # Force pipeline load
-                _ = self.layer
-            
-            console.clear()
-            header = "[bold blue]FRIDAY ONLINE[/bold blue]\n[dim]High-Performance Assistant Engine v0.2.0[/dim]"
-            if service_registry.limited_mode:
-                header += "\n[bold yellow]⚠️ LIMITED MODE ACTIVE: Some services are offline.[/bold yellow]"
-            
-            console.print(Panel.fit(header, border_style="cyan"))
-            console.print("[dim]Type [bold white]/help[/bold white] for commands or just start talking.[/dim]\n")
-            
-            loop_thread = threading.Thread(target=self._run_async_loop)
-            loop_thread.daemon = True
-            loop_thread.start()
-            
-            terminal_thread = threading.Thread(target=self.terminal_loop)
-            terminal_thread.daemon = True
-            terminal_thread.start()
-            
+            asyncio.run(validate_startup())
+            asyncio.set_event_loop(self.loop)
+            _ = self.layer
             self.listen_loop()
-        except Exception as e:
-            console.print(f"[bold red]Startup Error:[/bold red] {e}")
-
-    def terminal_loop(self):
-        while True:
-            try:
-                user_input = console.input("[bold purple]user[/bold purple] [dim]> [/dim]")
-                if not user_input.strip():
-                    continue
-                
-                cmd = user_input.strip().lower()
-                if cmd in ["exit", "quit", "stop"]:
-                    console.print("[italic yellow]FRIDAY: Shutting down. Goodbye Boss.[/italic yellow]")
-                    if self.has_gui:
-                        import rumps
-                        rumps.quit_application()
-                    else:
-                        os._exit(0)
-                    break
-                
-                if cmd == "/help":
-                    self.show_help()
-                    continue
-
-                if cmd == "/clear":
-                    console.clear()
-                    continue
-
-                if cmd == "/reset":
-                    self.clear_memory(None)
-                    continue
-
-                # Cancel previous task if a new one starts
-                if self.current_task:
-                    self.current_task.cancel()
-                
-                self.current_task = asyncio.run_coroutine_threadsafe(
-                    self.process_text(user_input), self.loop
-                )
-            except (KeyboardInterrupt, EOFError):
-                if self.has_gui:
-                    import rumps
-                    rumps.quit_application()
-                else:
-                    os._exit(0)
-                break
-            except Exception as e:
-                console.print(f"[bold red]Terminal Input Error:[/bold red] {e}")
-
-    def show_help(self):
-        help_text = """
-### Available Commands
-- **Text Input**: Just type normally to talk to FRIDAY.
-- **Voice Input**: Speak anytime (microphone is active).
-- `/help`: Show this help message.
-- `/clear`: Clear the terminal screen.
-- `/reset`: Clear conversation context memory.
-- `exit` / `quit`: Shut down FRIDAY.
-
-### State Machine (Live Ear)
-- **IDLE**: Waiting for input.
-- **LISTENING**: Microphone is active and detecting audio.
-- **CAPTURED**: Audio utterance has been recorded.
-- **PROCESSING**: Transcribing and thinking.
-- **RESPONDING**: Generating and playing audio response.
-"""
-        console.print(Panel(Markdown(help_text), title="[bold cyan]FRIDAY Help[/bold cyan]", border_style="cyan"))
-
-    def toggle_mic(self, sender):
-        self.listening = not self.listening
-        if self.listening:
-            sender.title = "Pause Listening"
-            if self.has_gui:
-                self.status_menu.title = "Status: Active"
-                self.app.title = "🤖"
-            self.state = FridayState.IDLE
-            console.print("[italic green]FRIDAY: Listening resumed.[/italic green]")
-        else:
-            sender.title = "Resume Listening"
-            if self.has_gui:
-                self.status_menu.title = "Status: Paused"
-                self.app.title = "💤"
-            console.print("[italic yellow]FRIDAY: Listening paused.[/italic yellow]")
-
-    def clear_memory(self, _):
-        self.layer.reset_memory()
-        if self.has_gui:
-            import rumps
-            rumps.notification("FRIDAY", "Memory Cleared", "Conversation context has been reset.")
-        console.print("[italic cyan]FRIDAY: Context memory cleared.[/italic cyan]")
-
-    def open_dashboard(self, _):
-        subprocess.Popen(["open", "http://localhost:3000/dashboard"])
-
-    def open_control_room(self, _):
-        subprocess.Popen(["open", "http://localhost:3000/control"])
+            self.loop.run_forever()
+        except Exception as e: logging.error(f"Backend Error: {e}")
 
     def listen_loop(self):
-        """Main voice interaction loop using the custom VoiceListener."""
         from app.voice.listener import listener
-        
-        # Configure listener calibration
-        listener.energy_threshold = 1000.0
-        # silence_timeout is now 0.8s by default in the class
-        
         async def run_listener():
             try:
                 self.state = FridayState.LISTENING
                 await listener.start(self.process_audio)
-                while True:
-                    await asyncio.sleep(1)
-            except Exception as e:
-                console.print(f"[bold red]Listener Error:[/bold red] {e}")
-            finally:
-                await listener.stop()
-
+                while True: await asyncio.sleep(1)
+            except Exception as e: logging.error(f"Listener error: {e}")
         asyncio.run_coroutine_threadsafe(run_listener(), self.loop)
+
+    async def process_audio(self, audio_bytes: bytes):
+        if not self.listening: return
+        self.state = FridayState.CAPTURED
+        try:
+            from app.voice.stt_service import stt_service
+            text = await stt_service.transcribe(audio_bytes)
+            if text and text.strip():
+                self.history.append(("user", text))
+                await self.process_text(text)
+            else: self.state = FridayState.IDLE
+        except Exception as e: self.state = FridayState.IDLE
 
     async def process_text(self, text: str):
         self.state = FridayState.PROCESSING
         try:
             from app.voice.tts_service import tts_service
-
-            full_response = ""
-            current_sentence = ""
+            full_res, current_sent = "", ""
             audio_queue = asyncio.Queue()
 
             async def audio_worker():
                 while True:
-                    sentence = await audio_queue.get()
-                    if sentence is None:
-                        audio_queue.task_done()
-                        break
-                    if sentence.strip():
-                        audio_response = await tts_service.get_audio(sentence.strip())
-                        if audio_response:
-                            with tempfile.NamedTemporaryFile(
-                                suffix=".mp3", delete=False
-                            ) as tmp:
-                                tmp.write(audio_response)
-                                tmp_path = tmp.name
-                            
-                            self.state = FridayState.RESPONDING
-                            self.current_proc = await asyncio.create_subprocess_exec(
-                                "afplay", tmp_path
-                            )
-                            await self.current_proc.wait()
-                            self.current_proc = None
-                            os.unlink(tmp_path)
-                            self.state = FridayState.PROCESSING # Back to processing if more sentences
+                    sent = await audio_queue.get()
+                    if sent is None: break
+                    audio = await tts_service.get_audio(sent.strip())
+                    if audio:
+                        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
+                            tmp.write(audio); p = tmp.name
+                        self.state = FridayState.RESPONDING
+                        proc = await asyncio.create_subprocess_exec("afplay", p)
+                        await proc.wait(); os.unlink(p)
                     audio_queue.task_done()
 
-            worker_task = asyncio.create_task(audio_worker())
-            
-            console.print("[bold cyan]friday[/bold cyan] [dim]> [/dim]", end="")
-            
-            with Live(Text(""), refresh_per_second=20, console=console) as live:
-                async for chunk in self.layer.stream_run(text, voice_mode=True):
-                    if chunk.startswith("event: token"):
-                        data = json.loads(chunk.split("data: ")[1])
-                        token = data.get("t", "")
-                        full_response += token
-                        current_sentence += token
-                        live.update(Text(full_response))
-                        
-                    if any(
-                        punct in current_sentence
-                        for punct in [". ", "! ", "? ", ".\n", "!\n", "?\n"]
-                    ):
-                        for punct in [". ", "! ", "? ", ".\n", "!\n", "?\n"]:
-                            if punct in current_sentence:
-                                parts = current_sentence.split(punct, 1)
-                                sentence_to_speak = parts[0] + punct
-                                current_sentence = parts[1] if len(parts) > 1 else ""
-                                await audio_queue.put(sentence_to_speak)
-                                break
-                
-            console.print()
-            if current_sentence.strip():
-                await audio_queue.put(current_sentence)
-            await audio_queue.put(None)
-            await worker_task
-        except asyncio.CancelledError:
-            if self.current_proc:
-                try:
-                    self.current_proc.terminate()
-                except:
-                    pass
-            console.print("\n[italic yellow][Interrupted][/italic yellow]")
-        except Exception as e:
-            console.print(f"\n[bold red]Error processing text:[/bold red] {e}")
-        finally:
-            self.current_task = None
-            self.state = FridayState.IDLE
+            worker = asyncio.create_task(audio_worker())
+            res_idx = len(self.history)
+            self.history.append(("friday", ""))
 
-    async def process_audio(self, audio_bytes: bytes):
-        if not self.listening:
-            return
-            
-        self.state = FridayState.CAPTURED
-        # Show "Processing..." feedback during STT
-        with console.status("[bold yellow]Processing...[/bold yellow]", spinner="bouncingBar"):
-            try:
-                from app.voice.stt_service import stt_service
-                text = await stt_service.transcribe(audio_bytes)
+            async for chunk in self.layer.stream_run(text, voice_mode=True):
+                if chunk.startswith("event: token"):
+                    token = json.loads(chunk.split("data: ")[1]).get("t", "")
+                    full_res += token; current_sent += token
+                    self.history[res_idx] = ("friday", full_res)
+                    if any(p in current_sent for p in [". ", "! ", "? "]):
+                        parts = current_sent.split(". ", 1)
+                        await audio_queue.put(parts[0] + ". ")
+                        current_sent = parts[1] if len(parts) > 1 else ""
 
-                if not text or not text.strip():
-                    self.state = FridayState.IDLE
-                    return
-                
-                self.state = FridayState.PROCESSING
-                console.print(f"[bold purple]user (voice)[/bold purple] [dim]> [/dim]{text}")
-                
-                # Handle interruption
-                if text.strip().lower() in ["stop", "hold on", "quiet", "shut up"]:
-                    if self.current_task:
-                        self.current_task.cancel()
-                        console.print("[italic yellow]FRIDAY: Stopping as requested.[/italic yellow]")
-                    self.state = FridayState.IDLE
-                    return
+            if current_sent.strip(): await audio_queue.put(current_sent)
+            await audio_queue.put(None); await worker; self.score += 1
+        except Exception as e: logging.error(f"Text Error: {e}")
+        finally: self.state = FridayState.IDLE
 
-                if text.strip().lower() in ["exit", "quit", "stop listening"]:
-                    if self.has_gui:
-                        import rumps
-                        rumps.quit_application()
-                    else:
-                        os._exit(0)
-                    return
-                
-                # Cancel previous task if a new one starts
-                if self.current_task:
-                    self.current_task.cancel()
-                
-                self.current_task = asyncio.create_task(self.process_text(text))
-                await self.current_task
-            except Exception as e:
-                console.print(f"\n[bold red]Error processing audio:[/bold red] {e}")
-                self.state = FridayState.IDLE
+    def render_ui(self) -> Table:
+        # Create a single unified table that contains everything
+        # This is much more robust than the nested Layout objects
+        main_table = Table.grid(expand=True)
+        main_table.add_column()
+        
+        # Header
+        header_grid = Table.grid(expand=True)
+        header_grid.add_column(justify="left", ratio=1)
+        header_grid.add_column(justify="center", ratio=1)
+        header_grid.add_column(justify="right", ratio=1)
+        header_grid.add_row("[friday]FRIDAY[/friday] [dim]v0.2.0[/dim]", "[bold white]ANTIGRAVITY ENGINE[/bold white]", datetime.now().strftime("%H:%M:%S"))
+        main_table.add_row(Panel(header_grid, style="blue"))
+        
+        # Body (Main + Sidebar)
+        body_table = Table.grid(expand=True)
+        body_table.add_column(ratio=3); body_table.add_column(ratio=1)
+        
+        # Main Chat
+        chat_text = Text()
+        for s, m in self.history[-6:]:
+            color = "purple" if s == "user" else "cyan"
+            chat_text.append(f"{s} > ", style=f"bold {color}")
+            chat_text.append(f"{m}\n", style="white")
+        main_chat = Panel(chat_text, title="[bold]NEURAL INTERFACE[/bold]", border_style="cyan", height=15)
+        
+        # Sidebar
+        stats = self.layer.telemetry.stats
+        stat_table = Table.grid(padding=(0, 1))
+        stat_table.add_column(style="dim cyan", justify="right")
+        stat_table.add_column(style="bold white")
+        stat_table.add_row("State", f"{self.state.value}")
+        stat_table.add_row("Score", f"[yellow]{self.score}[/yellow]")
+        stat_table.add_row("FLOPs", f"{stats.get('total_flops', 0):,.0f}")
+        stat_table.add_row("Energy", f"{stats.get('total_energy_joules', 0.0):.2f}J")
+        stat_table.add_row("Battery", f"{stats.get('battery_level', 1.0)*100:.0f}%")
+        sidebar = Panel(stat_table, title="[bold]TELEMETRY[/bold]", border_style="blue", height=15)
+        
+        body_table.add_row(main_chat, sidebar)
+        main_table.add_row(body_table)
+        
+        # Dino Footer
+        width = console.width - 15
+        gs = self._game_state; gs["tick"] += 1
+        ground = list(" " * width)
+        if gs["tick"] % 15 == 0: gs["obstacles"].append(width - 1)
+        gs["obstacles"] = [o - 1 for o in gs["obstacles"] if o > 0]
+        for o in gs["obstacles"]:
+            if o < width: ground[o] = "🌵"
+        
+        dino_char = "🦖" if self.state != FridayState.RESPONDING else "🔥"
+        dino_y = 1 if self.state in [FridayState.PROCESSING, FridayState.CAPTURED] else 0
+        
+        dino_text = Text()
+        if dino_y == 1:
+            dino_text.append(" " * 5 + dino_char + "\n", style="yellow")
+            dino_text.append("".join(ground) + "\n", style="green")
+        else:
+            line = "".join(ground); line = line[:5] + dino_char + line[6:]
+            dino_text.append(line + "\n", style="green")
+        dino_text.append("═" * width, style="blue")
+        
+        main_table.add_row(Panel(Align.center(dino_text), title="[bold yellow]CHROME MODE[/bold yellow]", border_style="blue", height=6))
+        
+        return main_table
 
     def run(self):
-        if self.has_gui:
-            self.app.run()
-        else:
-            # Keep main thread alive if no GUI
+        console.clear()
+        with Live(self.render_ui(), refresh_per_second=10, screen=True, auto_refresh=False) as live:
             while True:
-                time.sleep(1)
+                try:
+                    live.update(self.render_ui())
+                    live.refresh()
+                    time.sleep(0.1)
+                except KeyboardInterrupt: break
+                except Exception as e: logging.error(f"UI Error: {e}")
 
 def main():
-    app = FridayMenuApp()
-    app.run()
+    FridayMenuApp().run()
 
 if __name__ == "__main__":
     main()

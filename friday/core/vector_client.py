@@ -14,8 +14,11 @@ class ChromaClient:
         if self._collection is None:
             try:
                 import chromadb
-
-                client = chromadb.PersistentClient(path="./chroma_db")
+                import os
+                # Determine project root
+                base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                db_path = os.path.join(base_dir, "chroma_db")
+                client = chromadb.PersistentClient(path=db_path)
                 self._collection = client.get_or_create_collection(
                     name=self.collection_name,
                     metadata={"hnsw:space": "cosine"},

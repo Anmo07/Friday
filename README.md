@@ -50,11 +50,13 @@ Unlike traditional fact-checking services that rely on manual verification or si
 
 | Capability | Technology | Description |
 |---|---|---|
+| **macOS Menu Bar Assistant** | rumps + AppKit | Persistent system-tray AI with 'Liquid Glass' Tahoe aesthetics. |
+| **Acoustic Triggers** | Neural Rolling Buffer | Voice activation ('Hey Friday') and Double Clap acoustic spikes. |
 | **Event-Driven Multi-Agent** | CrewAI + Custom Event Bus | Orchestrates 6+ agents via asynchronous stream processing. |
 | **Hallucination Firewall** | Proprietary Logic | Intercepts agent outputs to prevent AI hallucinations and loops. |
 | **Predictive Trends** | Counter-Matrix Spike Detection | Identifies emerging misinformation waves *before* they go viral. |
 | **Knowledge Graph (KG)** | Neo4j + Graph Validation | Maps entity relationships to detect structural logical fallacies. |
-| **Voice-First Interface** | Web Speech API | Seamless Siri-like interaction for hands-free truth verification. |
+| **Liquid Glass Pop-out** | Native Cocoa (AppKit) | Siri-like floating UI with state-aware neural animations. |
 | **Chrome Extension** | Manifest V3 | Real-time truth scoring for any text on the web. |
 
 ---
@@ -91,20 +93,29 @@ graph TD
 
 ## 📦 Quick Start
 
-### 1. Local Development (Manual)
+### 1. macOS Desktop Assistant (Recommended)
+Friday is now a persistent macOS Menu Bar application with hands-free activation.
+
 ```bash
-# Clone and setup backend
+# Clone and setup
 git clone https://github.com/Anmo07/Friday.git
 cd Friday
 python -m venv venv
 source venv/bin/activate
-pip install -r requirements.txt
+pip install -e .
+
+# Run the Menu Bar App
+friday
+```
+*Look for the **Liquid Glass Orb (🤖)** in your menu bar.*
+
+### 2. Manual CLI/Web Dashboard (Legacy)
+```bash
+# Start backend
 python main.py
 
-# Setup Frontend
-cd frontend
-npm install
-npm run dev
+# Start Frontend
+cd frontend && npm install && npm run dev
 ```
 
 ### 2. Docker (Production-Ready)

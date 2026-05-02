@@ -166,15 +166,11 @@ class FridayPersonality:
             
         # Emotion-specific adaptations
         emotion_adaptations = {
-            "frustrated": "I understand this might be frustrating, Boss. Let me try to help clarify things for you.",
-            "confused": "No worries, Boss. Let me break this down in a simpler way for you.",
-            "excited": "That's great to hear, Boss! Your enthusiasm is contagious!",
-            "sad": "I'm here for you, Boss. Let's see if we can work through this together.",
-            "grateful": "You're very welcome, Boss. Happy to be of assistance!",
-            "urgent": "I understand this is urgent, Boss. Let me prioritize this and get you an answer quickly."
+            "frustrated": "I understand this might be frustrating, Boss. Let's clarify.",
+            "confused": "No worries, Boss. Let's simplify.",
+            "urgent": "I'm on it right now, Boss."
         }
         
-        # If we have a specific adaptation for this emotion, prepend it
         if emotion in emotion_adaptations:
             return f"{emotion_adaptations[emotion]} {response}"
         

@@ -1,0 +1,148 @@
+WARNING:huggingface_hub.utils._http:Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+INFO:core.pipeline:SemanticTurnDetector initialized.
+INFO:core.pipeline:AntigravityPipeline (Next-Gen) initialized for public in 4.97s
+INFO:core.startup_validation:Starting startup validation...
+INFO:core.service_registry:All services are healthy.
+INFO:core.startup_validation:Startup validation complete.
+INFO:app.voice.listener:Calibrating microphone... please be quiet.
+INFO:app.voice.listener:Calibration complete. Ambient RMS: 28, New threshold: 800
+INFO:app.voice.listener:Voice listener started
+INFO:app.voice.listener:Initializing neural acoustic monitor...
+INFO:app.voice.stt_service:Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+INFO:app.voice.stt_service:Loading Whisper large-v3-turbo (int8) on cpu...
+INFO:app.voice.stt_service:Whisper Large V3 Turbo ready.
+INFO:faster_whisper:Processing audio with duration 00:01.536
+INFO:faster_whisper:VAD filter removed 00:00.368 of audio
+INFO:app.voice.listener:Wake word 'Friday' verified.
+INFO:app.voice.stt_service:Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+INFO:faster_whisper:Processing audio with duration 00:00.768
+INFO:faster_whisper:VAD filter removed 00:00.768 of audio
+INFO:faster_whisper:Processing audio with duration 00:00.768
+WARNING:core.pipeline:Semantic Router index not ready. Using intent-based fallback.
+WARNING:huggingface_hub.utils._http:Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+INFO:core.pipeline:SemanticTurnDetector initialized.
+INFO:core.pipeline:AntigravityPipeline (Next-Gen) initialized for public in 5.24s
+INFO:core.startup_validation:Starting startup validation...
+INFO:core.service_registry:All services are healthy.
+INFO:core.startup_validation:Startup validation complete.
+INFO:app.voice.listener:Calibrating microphone... please be quiet.
+INFO:app.voice.listener:Calibration complete. Ambient RMS: 173, New threshold: 800
+INFO:app.voice.listener:Voice listener started
+INFO:app.voice.listener:Initializing neural acoustic monitor...
+INFO:app.voice.stt_service:Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+INFO:app.voice.stt_service:Loading Whisper large-v3-turbo (int8) on cpu...
+INFO:app.voice.stt_service:Whisper Large V3 Turbo ready.
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:faster_whisper:VAD filter removed 00:01.280 of audio
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:app.voice.stt_service:Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:faster_whisper:VAD filter removed 00:01.280 of audio
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:app.voice.stt_service:Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:faster_whisper:VAD filter removed 00:01.280 of audio
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:app.voice.stt_service:Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:faster_whisper:VAD filter removed 00:01.280 of audio
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:app.voice.stt_service:Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:faster_whisper:VAD filter removed 00:01.280 of audio
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:app.voice.stt_service:Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:faster_whisper:VAD filter removed 00:01.280 of audio
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:app.voice.stt_service:Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:faster_whisper:VAD filter removed 00:01.280 of audio
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:app.voice.stt_service:Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:faster_whisper:VAD filter removed 00:01.280 of audio
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:app.voice.stt_service:Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:faster_whisper:VAD filter removed 00:01.280 of audio
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:app.voice.stt_service:Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:faster_whisper:VAD filter removed 00:01.280 of audio
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:app.voice.stt_service:Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:faster_whisper:VAD filter removed 00:01.280 of audio
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:app.voice.stt_service:Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:faster_whisper:VAD filter removed 00:01.280 of audio
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:app.voice.stt_service:Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:faster_whisper:VAD filter removed 00:01.280 of audio
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:app.voice.stt_service:Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:faster_whisper:VAD filter removed 00:01.280 of audio
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:app.voice.stt_service:Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:faster_whisper:VAD filter removed 00:01.280 of audio
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:app.voice.stt_service:Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:faster_whisper:VAD filter removed 00:01.280 of audio
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:app.voice.stt_service:Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:faster_whisper:VAD filter removed 00:01.280 of audio
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:app.voice.stt_service:Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:faster_whisper:VAD filter removed 00:01.280 of audio
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:app.voice.stt_service:Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:faster_whisper:VAD filter removed 00:01.280 of audio
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:app.voice.stt_service:Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:faster_whisper:VAD filter removed 00:01.280 of audio
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:app.voice.stt_service:Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:faster_whisper:VAD filter removed 00:01.280 of audio
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:app.voice.stt_service:Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:faster_whisper:VAD filter removed 00:01.280 of audio
+INFO:faster_whisper:Processing audio with duration 00:01.280
+WARNING:huggingface_hub.utils._http:Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+INFO:core.pipeline:SemanticTurnDetector initialized.
+INFO:core.pipeline:AntigravityPipeline (Next-Gen) initialized for public in 4.52s
+INFO:core.startup_validation:Starting startup validation...
+INFO:core.service_registry:All services are healthy.
+INFO:core.startup_validation:Startup validation complete.
+INFO:app.voice.listener:Calibrating microphone... please be quiet.
+INFO:app.voice.listener:Calibration complete. Ambient RMS: 180, New threshold: 800
+INFO:app.voice.listener:Voice listener started
+INFO:app.voice.listener:Initializing neural acoustic monitor...
+INFO:app.voice.stt_service:Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+INFO:app.voice.stt_service:Loading Whisper large-v3-turbo (int8) on cpu...
+INFO:app.voice.stt_service:Whisper Large V3 Turbo ready.
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:faster_whisper:VAD filter removed 00:00.848 of audio
+INFO:app.voice.stt_service:Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:faster_whisper:VAD filter removed 00:00.784 of audio
+INFO:app.voice.stt_service:Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:faster_whisper:VAD filter removed 00:00.720 of audio
+INFO:app.voice.stt_service:Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:faster_whisper:VAD filter removed 00:00.656 of audio
+INFO:app.voice.stt_service:Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+INFO:faster_whisper:Processing audio with duration 00:01.280
+INFO:faster_whisper:VAD filter removed 00:00.464 of audio

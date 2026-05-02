@@ -1,40 +1,37 @@
-# Friday Quick Start Guide
+# 🚀 Friday Quick Start Guide (macOS)
 
-## 🚀 Easiest Way to Get Started (Recommended)
+Friday is now optimized as a native macOS Menu Bar assistant. 
 
-### Option 1: Using the Setup Script (Most User-Friendly)
-
-```bash
-# Download Friday (if you haven't already)
-# Unzip the downloaded file and navigate to the folder
-
-# Make the setup script executable
-chmod +x setup-friday.sh
-
-# Run the interactive setup wizard
-./setup-friday.sh
-```
-
-The setup wizard will guide you through:
-1. **Installation method** (Docker recommended)
-2. **Model source selection** (Local Ollama, Ollama Cloud, or HuggingFace)
-3. **Automatic configuration and startup**
-
-### Option 2: Direct Docker Command
-
-If you prefer to use Docker directly:
+### 1. Installation & Setup
 
 ```bash
-# Navigate to the friday directory
-cd friday
+# 1. Clone the project
+git clone https://github.com/Anmo07/Friday.git
+cd Friday
 
-# Start all services
-docker compose up --build
+# 2. Setup Virtual Environment
+python -m venv venv
+source venv/bin/activate
 
-# Friday will be available at:
-# - Frontend: http://localhost:3000
-# - Backend API: http://localhost:8001
+# 3. Install in editable mode (adds the 'friday' command)
+pip install -e .
 ```
+
+### 2. Launching Friday
+
+Simply run the command below:
+```bash
+friday
+```
+
+A **Liquid Glass Orb** will appear in your top Menu Bar. You can now minimize your terminal.
+
+### 3. Interaction & Triggers
+
+Friday is built for hands-free activation:
+- **Voice Trigger**: Say **"Hey Friday"** or simply **"Friday"**.
+- **Acoustic Trigger**: **Clap Twice** in rapid succession.
+- **Siri-Style UI**: A glowing orb will pop out in the bottom-right of your screen when Friday is listening or thinking.
 
 ## 🔧 Model Configuration Options
 

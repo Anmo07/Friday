@@ -71,14 +71,19 @@ class TelemetryManager:
             return 0.5  # Drastically reduce model complexity
         return 1.0
 
+# Determine project base directory
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 class LearningLayer:
     """
     Closed-loop learning primitive for capturing interaction traces.
     Enables background SFT and DSPy-based prompt optimization.
     """
-    def __init__(self, storage_path: str = "data/learning_traces"):
+    def __init__(self, storage_path: Optional[str] = None):
+        if storage_path is None:
+            storage_path = os.path.join(BASE_DIR, "data", "learning_traces")
         self.storage_path = storage_path
-        os.makedirs(storage_path, exist_ok=True)
+        os.makedirs(self.storage_path, exist_ok=True)
 
     def capture_trace(self, query: str, response: str, tool_calls: List[Dict], feedback: Optional[int] = None):
         trace = {
@@ -156,39 +161,69 @@ class FridayPipeline:
         return {}
 
     def _build_semantic_router(self) -> RouteLayer:
-        fast_route = Route(name="tier_1_fast", utterances=["open terminal", "set alarm", "volume up"])
-        standard_route = Route(name="tier_2_standard", utterances=["who is CEO", "what is photosynthesis"])
-        deep_route = Route(name="tier_3_deep", utterances=["verify financial report", "cross-reference research papers"])
-        audio_native_route = Route(name="tier_0_audio_native", utterances=["can we talk", "listen to me", "be my therapist"])
+        """
+        Builds the SemanticRouter with manual index population to avoid the 'Index is not ready' ValueError
+        associated with automatic fit() calls in version 0.1.12.
+        """
+        routes = [
+            Route(name="tier_1_fast", utterances=["open terminal", "set alarm", "volume up", "hello", "hi", "good morning"]),
+            Route(name="tier_2_standard", utterances=["who is CEO", "what is photosynthesis"]),
+            Route(name="tier_3_deep", utterances=["verify financial report", "cross-reference research papers"]),
+            Route(name="tier_0_audio_native", utterances=["can we talk", "listen to me", "be my therapist"]),
+        ]
         
-        rl = RouteLayer(encoder=self.encoder, routes=[audio_native_route, fast_route, standard_route, deep_route])
+        # Instantiate without calling fit() to prevent index readiness errors
+        rl = RouteLayer(encoder=self.encoder, routes=routes)
+        
+        # Manual Index Workaround: Explicitly add utterances to the LocalIndex
+        utterances = []
+        labels = []
+        for route in routes:
+            for utt in route.utterances:
+                utterances.append(utt)
+                labels.append(route.name)
+        
+        # Populate the index manually and mark as ready
+        if hasattr(rl, "index") and rl.index:
+            rl.index.add(utterances, labels)
+            logger.info("Semantic Router index manually built and populated.")
+            
         return rl
 
-    async def classify(self, query: str) -> str:
-        scaling_factor = self.telemetry.get_scaling_factor()
+    async def classify(self, query: str) -> Tuple[str, str]:
+        """
+        Determines the execution tier and intent.
+        Includes a strict keyword-boosting fallback to correctly handle greetings.
+        """
+        # Neutralize 'Friday' and clean query for fallback check
+        q_clean = query.lower().replace("friday", "").strip()
+        words = q_clean.split()
         
-        try:
-            # semantic-router's RouteLayer/SemanticRouter __call__ is synchronous, so we run in thread
-            route = await asyncio.to_thread(self.router, query)
+        # Fix: Refined Keyword Fallback for Greetings
+        if any(w in words for w in ["hello", "hi", "morning", "hey"]):
+            return "tier_1_fast", "Greeting"
             
-            if route and hasattr(route, 'name') and route.name:
-                tier = route.name
-            else:
-                tier = "tier_2_standard"
+        try:
+            # Semantic routing logic (run in thread to keep loop free)
+            route = await asyncio.to_thread(self.router, query)
+            tier = route.name if (route and hasattr(route, 'name') and route.name) else "tier_2_standard"
+            intent = "General"
         except Exception as e:
             if "Index is not ready" in str(e):
-                logger.warning("Semantic Router index not ready. Using intent-based fallback.")
+                logger.warning("Router index error - falling back to keyword logic.")
                 tier = self._detect_tier_fallback(query)
+                intent = "Fallback"
             else:
                 logger.error(f"Classification failed: {e}")
                 tier = "tier_2_standard"
+                intent = "Default"
         
-        # Dynamic scaling: Downgrade tier if battery is low
+        # Check for battery-driven scaling
+        scaling_factor = self.telemetry.get_scaling_factor()
         if scaling_factor < 0.6 and tier == "tier_3_deep":
-            logger.info("Telemetry Trigger: Downgrading Tier 3 -> Tier 2 due to power constraints.")
             tier = "tier_2_standard"
             
-        return tier
+        return tier, intent
 
     def _detect_tier_fallback(self, query: str) -> str:
         q = query.lower()
@@ -202,13 +237,13 @@ class FridayPipeline:
 
     async def run(self, query: str, voice_mode: bool = False) -> Dict[str, Any]:
         start_time = time.monotonic()
-        tier = await self.classify(query)
+        tier, intent = await self.classify(query)
         
         response_data = {}
         if tier == "tier_0_audio_native":
             response_data = await self._run_audio_native_engine(query)
         elif tier == "tier_1_fast":
-            response_data = {"response": await self._run_fast_agent(query, voice_mode), "tier": tier}
+            response_data = {"response": await self._run_fast_agent(query, intent, voice_mode), "tier": tier}
         elif tier == "tier_2_standard":
             vector_res = await self.retrieve_vector(query)
             response_data = {"response": await self._run_standard_agent(query, vector_res, voice_mode), "tier": tier}
@@ -294,9 +329,19 @@ class FridayPipeline:
         from models.ollama_runtime import create_ollama_llm
         return create_ollama_llm(model=model, temperature=temp)
 
-    async def _run_fast_agent(self, q, v):
+    async def _run_fast_agent(self, q, intent, voice_mode=False):
         llm = self._get_llm("phi3:mini")
-        return await llm.ainvoke(f"Fast response: {q}")
+        # Optimization: Strict Tier 1 Prompting
+        system_prompt = (
+            f"You are Friday's Tier 1 Fast Response module. "
+            f"Detected Intent: {intent}. "
+            "STRICT RULES: "
+            "1. If intent == 'Greeting', provide a concise welcome. "
+            "2. NEVER output 'you're welcome' in response to a greeting. "
+            "3. Do not assume the user is grateful unless 'thank' is explicitly present. "
+            "4. Keep response under 8 words. No meta-commentary."
+        )
+        return await llm.ainvoke(f"{system_prompt}\nUser Query: {q}")
 
     async def _run_standard_agent(self, q, c, v):
         llm = self._get_llm("llama3.1:8b-instruct")

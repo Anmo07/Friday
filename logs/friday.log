@@ -1,0 +1,224 @@
+2026-05-02 17:42:50,529 - huggingface_hub.utils._http - WARNING - Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-05-02 17:42:52,503 - core.pipeline - INFO - SemanticTurnDetector initialized.
+2026-05-02 17:42:52,507 - core.pipeline - INFO - AntigravityPipeline (Next-Gen) initialized for public in 4.88s
+2026-05-02 17:42:52,561 - core.startup_validation - INFO - Starting startup validation...
+2026-05-02 17:42:52,804 - core.service_registry - INFO - All services are healthy.
+2026-05-02 17:42:52,813 - core.startup_validation - INFO - Startup validation complete.
+2026-05-02 17:42:52,950 - app.voice.listener - INFO - Calibrating microphone... please be quiet.
+2026-05-02 17:42:54,141 - app.voice.listener - INFO - Calibration complete. Ambient RMS: 186, New threshold: 800
+2026-05-02 17:42:54,142 - app.voice.listener - INFO - Voice listener started
+2026-05-02 17:42:54,142 - app.voice.listener - INFO - Listening for wake trigger (threshold: 800.0)...
+2026-05-02 17:42:57,153 - app.voice.listener - INFO - Wake detected! RMS=2373
+2026-05-02 17:42:57,659 - app.voice.stt_service - INFO - Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+2026-05-02 17:42:57,894 - app.voice.stt_service - INFO - Loading Whisper large-v3-turbo (int8) on cpu...
+2026-05-02 17:43:01,153 - app.voice.stt_service - INFO - Whisper Large V3 Turbo ready.
+2026-05-02 17:43:01,154 - faster_whisper - INFO - Processing audio with duration 00:01.088
+2026-05-02 17:43:01,241 - faster_whisper - INFO - VAD filter removed 00:00.000 of audio
+2026-05-02 17:43:06,844 - app.voice.listener - INFO - End of thought predicted.
+2026-05-02 17:43:06,845 - app.voice.stt_service - INFO - Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+2026-05-02 17:43:06,845 - faster_whisper - INFO - Processing audio with duration 00:01.088
+2026-05-02 17:43:06,848 - faster_whisper - INFO - VAD filter removed 00:00.000 of audio
+2026-05-02 17:43:12,457 - core.pipeline - WARNING - Semantic Router index not ready. Using intent-based fallback.
+2026-05-02 17:43:41,921 - app.voice.listener - INFO - Wake detected! RMS=1500
+2026-05-02 17:43:41,924 - app.voice.stt_service - INFO - Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+2026-05-02 17:43:41,924 - faster_whisper - INFO - Processing audio with duration 00:01.088
+2026-05-02 17:43:41,931 - faster_whisper - INFO - VAD filter removed 00:00.144 of audio
+2026-05-02 17:43:47,613 - app.voice.listener - INFO - End of thought predicted.
+2026-05-02 17:43:47,613 - app.voice.stt_service - INFO - Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+2026-05-02 17:43:47,614 - faster_whisper - INFO - Processing audio with duration 00:01.088
+2026-05-02 17:43:47,617 - faster_whisper - INFO - VAD filter removed 00:00.144 of audio
+2026-05-02 17:43:53,231 - core.pipeline - WARNING - Semantic Router index not ready. Using intent-based fallback.
+2026-05-02 17:44:02,495 - app.voice.listener - INFO - Wake detected! RMS=1227
+2026-05-02 17:44:02,498 - app.voice.stt_service - INFO - Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+2026-05-02 17:44:02,499 - faster_whisper - INFO - Processing audio with duration 00:01.088
+2026-05-02 17:44:02,506 - faster_whisper - INFO - VAD filter removed 00:00.000 of audio
+2026-05-02 17:44:08,131 - app.voice.stt_service - INFO - Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+2026-05-02 17:44:08,131 - faster_whisper - INFO - Processing audio with duration 00:02.048
+2026-05-02 17:44:08,136 - faster_whisper - INFO - VAD filter removed 00:00.000 of audio
+2026-05-02 17:44:13,894 - app.voice.listener - INFO - End of thought predicted.
+2026-05-02 17:44:13,895 - app.voice.stt_service - INFO - Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+2026-05-02 17:44:13,895 - faster_whisper - INFO - Processing audio with duration 00:02.048
+2026-05-02 17:44:13,900 - faster_whisper - INFO - VAD filter removed 00:00.000 of audio
+2026-05-02 17:44:19,920 - core.pipeline - WARNING - Semantic Router index not ready. Using intent-based fallback.
+2026-05-02 17:46:04,871 - huggingface_hub.utils._http - WARNING - Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-05-02 17:46:06,822 - core.pipeline - INFO - SemanticTurnDetector initialized.
+2026-05-02 17:46:06,825 - core.pipeline - INFO - AntigravityPipeline (Next-Gen) initialized for public in 4.69s
+2026-05-02 17:46:06,862 - core.startup_validation - INFO - Starting startup validation...
+2026-05-02 17:46:07,083 - core.service_registry - INFO - All services are healthy.
+2026-05-02 17:46:07,089 - core.startup_validation - INFO - Startup validation complete.
+2026-05-02 17:46:07,108 - root - ERROR - UI Error: 'FridayMenuApp' object has no attribute 'console'
+2026-05-02 17:46:07,174 - app.voice.listener - INFO - Calibrating microphone... please be quiet.
+2026-05-02 17:46:08,366 - app.voice.listener - INFO - Calibration complete. Ambient RMS: 18, New threshold: 800
+2026-05-02 17:46:08,366 - app.voice.listener - INFO - Voice listener started
+2026-05-02 17:46:08,373 - app.voice.listener - INFO - Listening for wake trigger (threshold: 800.0)...
+2026-05-02 17:46:22,432 - app.voice.listener - INFO - Wake detected! RMS=988
+2026-05-02 17:46:23,436 - app.voice.stt_service - INFO - Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+2026-05-02 17:46:23,669 - app.voice.stt_service - INFO - Loading Whisper large-v3-turbo (int8) on cpu...
+2026-05-02 17:46:27,029 - app.voice.stt_service - INFO - Whisper Large V3 Turbo ready.
+2026-05-02 17:46:27,030 - faster_whisper - INFO - Processing audio with duration 00:01.088
+2026-05-02 17:46:27,118 - faster_whisper - INFO - VAD filter removed 00:00.000 of audio
+2026-05-02 17:46:32,784 - app.voice.listener - INFO - End of thought predicted.
+2026-05-02 17:46:32,784 - app.voice.stt_service - INFO - Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+2026-05-02 17:46:32,784 - faster_whisper - INFO - Processing audio with duration 00:01.088
+2026-05-02 17:46:32,787 - faster_whisper - INFO - VAD filter removed 00:00.000 of audio
+2026-05-02 17:46:38,569 - core.pipeline - WARNING - Semantic Router index not ready. Using intent-based fallback.
+2026-05-02 17:46:53,694 - app.voice.listener - INFO - Wake detected! RMS=1456
+2026-05-02 17:46:53,696 - app.voice.stt_service - INFO - Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+2026-05-02 17:46:53,697 - faster_whisper - INFO - Processing audio with duration 00:01.088
+2026-05-02 17:46:53,703 - faster_whisper - INFO - VAD filter removed 00:00.000 of audio
+2026-05-02 17:46:59,521 - app.voice.listener - INFO - End of thought predicted.
+2026-05-02 17:46:59,522 - app.voice.stt_service - INFO - Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+2026-05-02 17:46:59,523 - faster_whisper - INFO - Processing audio with duration 00:01.088
+2026-05-02 17:46:59,525 - faster_whisper - INFO - VAD filter removed 00:00.000 of audio
+2026-05-02 17:47:05,264 - core.pipeline - WARNING - Semantic Router index not ready. Using intent-based fallback.
+2026-05-02 17:47:23,785 - app.voice.listener - INFO - Wake detected! RMS=1838
+2026-05-02 17:47:23,788 - app.voice.stt_service - INFO - Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+2026-05-02 17:47:23,788 - faster_whisper - INFO - Processing audio with duration 00:01.088
+2026-05-02 17:47:23,796 - faster_whisper - INFO - VAD filter removed 00:00.000 of audio
+2026-05-02 17:47:29,446 - app.voice.listener - INFO - End of thought predicted.
+2026-05-02 17:47:29,446 - app.voice.stt_service - INFO - Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+2026-05-02 17:47:29,447 - faster_whisper - INFO - Processing audio with duration 00:01.088
+2026-05-02 17:47:29,450 - faster_whisper - INFO - VAD filter removed 00:00.000 of audio
+2026-05-02 17:47:35,097 - core.pipeline - WARNING - Semantic Router index not ready. Using intent-based fallback.
+2026-05-02 17:47:47,187 - huggingface_hub.utils._http - WARNING - Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-05-02 17:47:49,223 - core.pipeline - INFO - SemanticTurnDetector initialized.
+2026-05-02 17:47:49,226 - core.pipeline - INFO - AntigravityPipeline (Next-Gen) initialized for public in 5.07s
+2026-05-02 17:47:49,270 - core.startup_validation - INFO - Starting startup validation...
+2026-05-02 17:47:49,502 - core.service_registry - INFO - All services are healthy.
+2026-05-02 17:47:49,507 - core.startup_validation - INFO - Startup validation complete.
+2026-05-02 17:47:49,594 - app.voice.listener - INFO - Calibrating microphone... please be quiet.
+2026-05-02 17:47:50,787 - app.voice.listener - INFO - Calibration complete. Ambient RMS: 85, New threshold: 800
+2026-05-02 17:47:50,787 - app.voice.listener - INFO - Voice listener started
+2026-05-02 17:47:50,787 - app.voice.listener - INFO - Listening for wake trigger (threshold: 800.0)...
+2026-05-02 17:50:45,257 - huggingface_hub.utils._http - WARNING - Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-05-02 17:50:47,241 - core.pipeline - INFO - SemanticTurnDetector initialized.
+2026-05-02 17:50:47,244 - core.pipeline - INFO - AntigravityPipeline (Next-Gen) initialized for public in 5.63s
+2026-05-02 17:50:47,272 - core.startup_validation - INFO - Starting startup validation...
+2026-05-02 17:50:47,551 - core.service_registry - INFO - All services are healthy.
+2026-05-02 17:50:47,559 - core.startup_validation - INFO - Startup validation complete.
+2026-05-02 17:50:47,627 - app.voice.listener - INFO - Calibrating microphone... please be quiet.
+2026-05-02 17:50:48,802 - app.voice.listener - INFO - Calibration complete. Ambient RMS: 83, New threshold: 800
+2026-05-02 17:50:48,802 - app.voice.listener - INFO - Voice listener started
+2026-05-02 17:50:48,802 - app.voice.listener - INFO - Listening for wake trigger (threshold: 800.0)...
+2026-05-02 17:50:50,805 - app.voice.listener - INFO - Wake detected! RMS=965
+2026-05-02 17:50:51,307 - app.voice.stt_service - INFO - Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+2026-05-02 17:50:51,583 - app.voice.stt_service - INFO - Loading Whisper large-v3-turbo (int8) on cpu...
+2026-05-02 17:50:54,367 - app.voice.stt_service - INFO - Whisper Large V3 Turbo ready.
+2026-05-02 17:50:54,368 - faster_whisper - INFO - Processing audio with duration 00:01.088
+2026-05-02 17:50:54,441 - faster_whisper - INFO - VAD filter removed 00:01.088 of audio
+2026-05-02 17:50:54,446 - faster_whisper - INFO - Processing audio with duration 00:01.088
+2026-05-02 17:51:00,719 - app.voice.listener - INFO - End of thought predicted.
+2026-05-02 17:51:00,719 - app.voice.stt_service - INFO - Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+2026-05-02 17:51:00,720 - faster_whisper - INFO - Processing audio with duration 00:01.088
+2026-05-02 17:51:00,723 - faster_whisper - INFO - VAD filter removed 00:01.088 of audio
+2026-05-02 17:51:00,725 - faster_whisper - INFO - Processing audio with duration 00:01.088
+2026-05-02 17:51:06,987 - core.pipeline - WARNING - Semantic Router index not ready. Using intent-based fallback.
+2026-05-02 17:51:21,731 - app.voice.listener - INFO - Wake detected! RMS=959
+2026-05-02 17:51:21,735 - app.voice.stt_service - INFO - Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+2026-05-02 17:51:21,736 - faster_whisper - INFO - Processing audio with duration 00:01.088
+2026-05-02 17:51:21,742 - faster_whisper - INFO - VAD filter removed 00:00.000 of audio
+2026-05-02 17:51:27,361 - app.voice.listener - INFO - End of thought predicted.
+2026-05-02 17:51:27,361 - app.voice.stt_service - INFO - Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+2026-05-02 17:51:27,361 - faster_whisper - INFO - Processing audio with duration 00:01.088
+2026-05-02 17:51:27,364 - faster_whisper - INFO - VAD filter removed 00:00.000 of audio
+2026-05-02 17:51:32,950 - core.pipeline - WARNING - Semantic Router index not ready. Using intent-based fallback.
+2026-05-02 17:51:50,085 - app.voice.listener - INFO - Wake detected! RMS=954
+2026-05-02 17:51:50,086 - app.voice.stt_service - INFO - Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+2026-05-02 17:51:50,087 - faster_whisper - INFO - Processing audio with duration 00:01.088
+2026-05-02 17:51:50,092 - faster_whisper - INFO - VAD filter removed 00:01.088 of audio
+2026-05-02 17:51:50,105 - faster_whisper - INFO - Processing audio with duration 00:01.088
+2026-05-02 17:52:01,510 - app.voice.stt_service - INFO - Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+2026-05-02 17:52:01,512 - faster_whisper - INFO - Processing audio with duration 00:02.048
+2026-05-02 17:52:01,518 - faster_whisper - INFO - VAD filter removed 00:02.048 of audio
+2026-05-02 17:52:01,532 - faster_whisper - INFO - Processing audio with duration 00:02.048
+2026-05-02 17:52:12,775 - app.voice.stt_service - INFO - Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+2026-05-02 17:52:12,776 - faster_whisper - INFO - Processing audio with duration 00:03.008
+2026-05-02 17:52:12,797 - faster_whisper - INFO - VAD filter removed 00:03.008 of audio
+2026-05-02 17:52:12,805 - faster_whisper - INFO - Processing audio with duration 00:03.008
+2026-05-02 17:52:24,222 - app.voice.stt_service - INFO - Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+2026-05-02 17:52:24,223 - faster_whisper - INFO - Processing audio with duration 00:03.968
+2026-05-02 17:53:00,937 - huggingface_hub.utils._http - WARNING - Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-05-02 17:53:03,185 - core.pipeline - INFO - SemanticTurnDetector initialized.
+2026-05-02 17:53:03,188 - core.pipeline - INFO - AntigravityPipeline (Next-Gen) initialized for public in 5.39s
+2026-05-02 17:53:03,213 - core.startup_validation - INFO - Starting startup validation...
+2026-05-02 17:53:03,466 - core.service_registry - INFO - All services are healthy.
+2026-05-02 17:53:03,472 - core.startup_validation - INFO - Startup validation complete.
+2026-05-02 17:53:03,531 - app.voice.listener - INFO - Calibrating microphone... please be quiet.
+2026-05-02 17:53:04,723 - app.voice.listener - INFO - Calibration complete. Ambient RMS: 182, New threshold: 800
+2026-05-02 17:53:04,723 - app.voice.listener - INFO - Voice listener started
+2026-05-02 17:53:04,724 - app.voice.listener - INFO - Listening for wake trigger (threshold: 800.0)...
+2026-05-02 17:53:35,845 - app.voice.listener - INFO - Wake detected! RMS=879
+2026-05-02 17:53:35,847 - app.voice.stt_service - INFO - Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+2026-05-02 17:53:36,187 - app.voice.stt_service - INFO - Loading Whisper large-v3-turbo (int8) on cpu...
+2026-05-02 17:53:39,358 - app.voice.stt_service - INFO - Whisper Large V3 Turbo ready.
+2026-05-02 17:53:39,358 - faster_whisper - INFO - Processing audio with duration 00:00.896
+2026-05-02 17:53:39,449 - faster_whisper - INFO - VAD filter removed 00:00.896 of audio
+2026-05-02 17:53:39,456 - faster_whisper - INFO - Processing audio with duration 00:00.896
+2026-05-02 17:53:51,207 - core.pipeline - WARNING - Semantic Router index not ready. Using intent-based fallback.
+2026-05-02 17:54:12,506 - app.voice.listener - INFO - Wake detected! RMS=1126
+2026-05-02 17:54:12,543 - app.voice.stt_service - INFO - Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+2026-05-02 17:54:12,544 - faster_whisper - INFO - Processing audio with duration 00:01.024
+2026-05-02 17:54:12,549 - faster_whisper - INFO - VAD filter removed 00:01.024 of audio
+2026-05-02 17:54:12,554 - faster_whisper - INFO - Processing audio with duration 00:01.024
+2026-05-02 17:54:19,309 - core.pipeline - WARNING - Semantic Router index not ready. Using intent-based fallback.
+2026-05-02 17:54:36,338 - app.voice.listener - INFO - Wake detected! RMS=1169
+2026-05-02 17:54:36,340 - app.voice.stt_service - INFO - Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+2026-05-02 17:54:36,340 - faster_whisper - INFO - Processing audio with duration 00:01.088
+2026-05-02 17:54:36,345 - faster_whisper - INFO - VAD filter removed 00:01.088 of audio
+2026-05-02 17:54:36,352 - faster_whisper - INFO - Processing audio with duration 00:01.088
+2026-05-02 17:54:42,683 - app.voice.listener - INFO - End of thought predicted.
+2026-05-02 17:54:42,683 - app.voice.stt_service - INFO - Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+2026-05-02 17:54:42,683 - faster_whisper - INFO - Processing audio with duration 00:01.088
+2026-05-02 17:54:42,687 - faster_whisper - INFO - VAD filter removed 00:01.088 of audio
+2026-05-02 17:54:42,688 - faster_whisper - INFO - Processing audio with duration 00:01.088
+2026-05-02 17:54:48,875 - core.pipeline - WARNING - Semantic Router index not ready. Using intent-based fallback.
+2026-05-02 17:55:08,273 - core.pipeline - INFO - SemanticTurnDetector initialized.
+2026-05-02 17:55:08,276 - core.pipeline - INFO - AntigravityPipeline (Next-Gen) initialized for public in 4.67s
+2026-05-02 17:55:08,281 - core.startup_validation - INFO - Starting startup validation...
+2026-05-02 17:55:08,592 - core.service_registry - INFO - All services are healthy.
+2026-05-02 17:55:08,598 - core.startup_validation - INFO - Startup validation complete.
+2026-05-02 17:55:08,726 - app.voice.listener - INFO - Calibrating microphone... please be quiet.
+2026-05-02 17:55:09,921 - app.voice.listener - INFO - Calibration complete. Ambient RMS: 57, New threshold: 800
+2026-05-02 17:55:09,923 - app.voice.listener - INFO - Voice listener started
+2026-05-02 17:55:09,923 - app.voice.listener - INFO - Listening for wake trigger (threshold: 800.0)...
+2026-05-02 17:55:20,964 - app.voice.listener - INFO - Wake detected! RMS=2113
+2026-05-02 17:55:21,966 - app.voice.stt_service - INFO - Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+2026-05-02 17:55:22,183 - app.voice.stt_service - INFO - Loading Whisper large-v3-turbo (int8) on cpu...
+2026-05-02 17:55:25,339 - app.voice.stt_service - INFO - Whisper Large V3 Turbo ready.
+2026-05-02 17:55:25,340 - faster_whisper - INFO - Processing audio with duration 00:01.088
+2026-05-02 17:55:25,426 - faster_whisper - INFO - VAD filter removed 00:01.088 of audio
+2026-05-02 17:55:25,432 - faster_whisper - INFO - Processing audio with duration 00:01.088
+2026-05-02 17:55:31,278 - app.voice.stt_service - INFO - Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+2026-05-02 17:55:31,278 - faster_whisper - INFO - Processing audio with duration 00:02.048
+2026-05-02 17:55:31,283 - faster_whisper - INFO - VAD filter removed 00:02.048 of audio
+2026-05-02 17:55:31,287 - faster_whisper - INFO - Processing audio with duration 00:02.048
+2026-05-02 17:55:37,070 - app.voice.stt_service - INFO - Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+2026-05-02 17:55:37,071 - faster_whisper - INFO - Processing audio with duration 00:02.880
+2026-05-02 17:55:37,078 - faster_whisper - INFO - VAD filter removed 00:02.880 of audio
+2026-05-02 17:55:37,079 - faster_whisper - INFO - Processing audio with duration 00:02.880
+2026-05-02 17:55:45,815 - core.pipeline - WARNING - Semantic Router index not ready. Using intent-based fallback.
+2026-05-02 17:56:02,755 - app.voice.listener - INFO - Wake detected! RMS=855
+2026-05-02 17:56:02,758 - app.voice.stt_service - INFO - Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+2026-05-02 17:56:02,759 - faster_whisper - INFO - Processing audio with duration 00:01.088
+2026-05-02 17:56:02,767 - faster_whisper - INFO - VAD filter removed 00:01.088 of audio
+2026-05-02 17:56:02,773 - faster_whisper - INFO - Processing audio with duration 00:01.088
+WARNING:huggingface_hub.utils._http:Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+INFO:core.pipeline:SemanticTurnDetector initialized.
+INFO:core.pipeline:AntigravityPipeline (Next-Gen) initialized for public in 5.23s
+INFO:core.startup_validation:Starting startup validation...
+INFO:core.service_registry:All services are healthy.
+INFO:core.startup_validation:Startup validation complete.
+INFO:app.voice.listener:Calibrating microphone... please be quiet.
+INFO:app.voice.listener:Calibration complete. Ambient RMS: 32, New threshold: 800
+INFO:app.voice.listener:Voice listener started
+INFO:app.voice.listener:Listening for wake trigger (threshold: 800.0)...
+INFO:app.voice.listener:Wake detected! RMS=1013
+INFO:app.voice.stt_service:Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+INFO:app.voice.stt_service:Loading Whisper large-v3-turbo (int8) on cpu...
+INFO:app.voice.stt_service:Whisper Large V3 Turbo ready.
+INFO:faster_whisper:Processing audio with duration 00:01.088
+INFO:faster_whisper:VAD filter removed 00:00.000 of audio
+INFO:app.voice.listener:End of thought predicted.
+INFO:app.voice.stt_service:Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+INFO:faster_whisper:Processing audio with duration 00:01.088
+INFO:faster_whisper:VAD filter removed 00:00.000 of audio

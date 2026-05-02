@@ -87,96 +87,110 @@ class VoiceListener:
     async def _listen_loop(self):
         try:
             import sounddevice as sd
+            import numpy as np
         except ImportError:
-            logger.error(
-                "sounddevice not installed. Install with: pip install sounddevice"
-            )
+            logger.error("sounddevice/numpy not installed.")
             self._running = False
             return
-        logger.info(
-            f"Listening for wake trigger (energy threshold: {self.energy_threshold})..."
-        )
-        while self._running:
-            try:
-                audio_data = await asyncio.to_thread(
-                    sd.rec,
-                    frames=self.chunk_size,
-                    samplerate=self.sample_rate,
-                    channels=1,
-                    dtype="int16",
-                    blocking=True,
-                )
-                if audio_data is None:
-                    continue
-                audio_bytes = audio_data.tobytes()
-                rms = self._calculate_rms(audio_bytes)
-                if rms > self.energy_threshold:
-                    logger.info(f"Wake detected! RMS={rms:.0f}")
-                    full_audio = await self._capture_utterance(sd)
-                    if full_audio and self._callback:
-                        await self._callback(full_audio)
-                await asyncio.sleep(0.05)
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                logger.error(f"Listener error: {e}")
-                await asyncio.sleep(1.0)
 
-    async def _capture_utterance(self, sd) -> Optional[bytes]:
-        chunks = []
-        silence_count = 0
+        logger.info("Initializing neural acoustic monitor...")
         
-        # Access the AntigravityPipeline singleton for Semantic Turn Detection
+        queue = asyncio.Queue()
+        def audio_callback(indata, frames, time, status):
+            queue.put_nowait(indata.copy())
+
+        # Clap and Wake detection state
+        last_clap_time = 0
+        audio_buffer = []
+
+        try:
+            with sd.InputStream(samplerate=self.sample_rate, channels=1, dtype='int16', 
+                              blocksize=self.chunk_size, callback=audio_callback):
+                while self._running:
+                    audio_chunk = await queue.get()
+                    audio_bytes = audio_chunk.tobytes()
+                    rms = self._calculate_rms(audio_bytes)
+                    
+                    # Rolling buffer for wake word
+                    audio_buffer.append(audio_bytes)
+                    if len(audio_buffer) > 20: audio_buffer.pop(0) # Keep ~1.2s
+
+                    # 1. Precise Double Clap Detection
+                    if rms > self.energy_threshold * 5.0:
+                        now = time.time()
+                        if 0.1 < (now - last_clap_time) < 0.6:
+                            logger.info("Double Clap Verified. Activating...")
+                            full_audio = await self._capture_utterance_from_queue(queue, b"")
+                            if full_audio and self._callback: await self._callback(full_audio)
+                            last_clap_time = 0
+                        else:
+                            last_clap_time = now
+                        continue
+
+                    # 2. Continuous Wake Word Verification
+                    if rms > self.energy_threshold and len(audio_buffer) >= 10:
+                        if await self._is_wake_word(b"".join(audio_buffer)):
+                            logger.info("Wake word detected.")
+                            full_audio = await self._capture_utterance_from_queue(queue, b"")
+                            if full_audio and self._callback: await self._callback(full_audio)
+                            audio_buffer = [] # Reset buffer
+                    
+                    await asyncio.sleep(0.01)
+        except Exception as e:
+            logger.error(f"Acoustic monitor failed: {e}")
+            self._running = False
+
+    async def _capture_short_window(self, queue: asyncio.Queue, initial: bytes) -> bytes:
+        """Capture ~1.5s of audio to check for wake word."""
+        chunks = [initial]
+        for _ in range(int(1.5 * self.sample_rate / self.chunk_size)):
+            try:
+                chunk = await asyncio.wait_for(queue.get(), timeout=0.2)
+                chunks.append(chunk.tobytes())
+            except: break
+        return b"".join(chunks)
+
+    async def _is_wake_word(self, audio_bytes: bytes) -> bool:
+        from app.voice.stt_service import stt_service
+        text = (await stt_service.transcribe(audio_bytes)).lower().strip()
+        # Look for variations of the wake word
+        return any(w in text for w in ["friday", "hey friday", "hi friday", "ready friday"])
+
+    async def _capture_utterance_from_queue(self, queue: asyncio.Queue, initial_chunk: bytes, is_wake_clapped=False) -> Optional[bytes]:
+        chunks = [initial_chunk] if initial_chunk else []
+        silence_count = 0
         from core.pipeline import FridayPipeline
         from app.voice.stt_service import stt_service
         pipeline = FridayPipeline()
         
-        max_duration_chunks = int(10.0 * self.sample_rate / self.chunk_size)
+        # If clapped, we start fresh. If wake-word, we already have some audio.
+        max_duration_chunks = int(12.0 * self.sample_rate / self.chunk_size)
         transcription_buffer = ""
         
         for i in range(max_duration_chunks):
-            if not self._running:
-                break
+            if not self._running: break
             try:
-                audio_data = await asyncio.to_thread(
-                    sd.rec,
-                    frames=self.chunk_size,
-                    samplerate=self.sample_rate,
-                    channels=1,
-                    dtype="int16",
-                    blocking=True,
-                )
-                if audio_data is None:
-                    break
-                audio_bytes = audio_data.tobytes()
+                audio_chunk = await asyncio.wait_for(queue.get(), timeout=1.0)
+                audio_bytes = audio_chunk.tobytes()
                 chunks.append(audio_bytes)
                 
-                # Periodically update transcription buffer for semantic turn detection
-                if i > 0 and i % 10 == 0: # Every ~600ms
+                if i > 0 and i % 20 == 0:
                     transcription_buffer = await stt_service.transcribe(b"".join(chunks))
                 
-                # Phase 1: Semantic Turn Detection
-                is_turn_complete = await pipeline.turn_detector.predict_end_of_thought(
-                    audio_bytes, transcription_buffer
-                )
-                
-                if is_turn_complete and len(transcription_buffer.strip()) > 0:
-                    logger.info(f"Semantic Turn Detected. Transcription: {transcription_buffer}")
-                    break
+                if len(transcription_buffer.strip()) > 5:
+                    if await pipeline.turn_detector.predict_end_of_thought(audio_bytes, transcription_buffer):
+                        break
                 
                 rms = self._calculate_rms(audio_bytes)
-                if rms < self.energy_threshold * 0.3:
+                if rms < self.energy_threshold * 0.4:
                     silence_count += 1
                     if silence_count >= int(self.silence_timeout * self.sample_rate / self.chunk_size):
                         break
                 else:
                     silence_count = 0
-            except Exception as e:
-                logger.error(f"Capture error: {e}")
-                break
-        if chunks:
-            return b"".join(chunks)
-        return None
+            except: break
+        
+        return b"".join(chunks) if chunks else None
 
     @property
     def is_running(self) -> bool:
