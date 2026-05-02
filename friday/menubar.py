@@ -1,4 +1,4 @@
-from macos_menu_bar import FridayMenuBar, main
+from .macos_menu_bar import FridayMenuBar, main
 
 __all__ = ["FridayMenuBar", "main"]
 

@@ -83,10 +83,13 @@ class STTService:
         elapsed = time.time() - start_time
         logger.debug(f"STT Latency: {elapsed*1000:.0f}ms | Text: {text}")
         
-        # Tracking telemetry for STT stage
-        from core.pipeline import FridayPipeline
-        pipeline = FridayPipeline()
-        pipeline.telemetry.track_query_efficiency("tier_1_stt", "whisper-large-v3", elapsed * 1000)
+        # Tracking telemetry for STT stage - Avoid initializing heavy pipeline if not needed
+        try:
+            from core.observability import TelemetryManager
+            telemetry = TelemetryManager()
+            telemetry.track_query_efficiency("tier_1_stt", "whisper-large-v3", elapsed * 1000)
+        except Exception as e:
+            logger.debug(f"Telemetry tracking skipped: {e}")
         
         return text.strip()
 

@@ -189,7 +189,7 @@ async def ws_stream(websocket: WebSocket, token: str | None = None) -> None:
                 )
                 continue
             pipeline = websocket.app.state.pipeline
-            tier = await pipeline.classify(normalized_query)
+            tier, intent = await pipeline.classify(normalized_query)
             tts_service.interrupt() # Interrupt previous response if a new one starts
             if current_task and not current_task.done():
                 current_task.cancel()
@@ -208,7 +208,8 @@ async def ws_stream(websocket: WebSocket, token: str | None = None) -> None:
                     "status": "assistant",
                     "message": "Processing your request, Boss...",
                     "mode": "assistant",
-                    "intent": tier,
+                    "intent": intent,
+                    "tier": tier,
                 },
             )
             current_task = asyncio.create_task(
@@ -307,7 +308,7 @@ async def ws_voice(websocket: WebSocket, token: str | None = None) -> None:
                 )
                 continue
             pipeline = websocket.app.state.pipeline
-            tier = await pipeline.classify(text)
+            tier, intent = await pipeline.classify(text)
             tts_service.interrupt() # Interrupt if user starts speaking again
             await _send_json(
                 websocket,

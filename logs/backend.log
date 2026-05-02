@@ -1,0 +1,18 @@
+2026-05-02 22:24:19,608 [INFO] app.voice.listener: No enrolled voice profile found. Friday will remain locked.
+INFO:     Started server process [13072]
+INFO:     Waiting for application startup.
+2026-05-02 22:24:19,735 [INFO] app.core.cache: Redis cache connected: redis://localhost:6379/0
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-05-02 22:24:21,411 [WARNING] huggingface_hub.utils._http: Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Notice: ffmpeg is not installed. torchaudio is used to load audio
+If you want to use ffmpeg backend to load audio, please install it by:
+	sudo apt install ffmpeg # ubuntu
+	# brew install ffmpeg # mac
+Loading weights:   0%|          | 0/103 [00:00<?, ?it/s]Loading weights: 100%|██████████| 103/103 [00:00<00:00, 16330.74it/s]
+[33m2026-05-02 22:24:23 WARNING semantic_router No index provided. Using default LocalIndex.[0m
+2026-05-02 22:24:23,012 [INFO] core.pipeline: SemanticTurnDetector initialized.
+2026-05-02 22:24:23,012 [INFO] core.pipeline: EmotionEngine (MER) initialized.
+2026-05-02 22:24:23,012 [INFO] core.pipeline: Initializing Pipecat WebRTC Transport Layer...
+2026-05-02 22:24:23,015 [INFO] core.pipeline: AntigravityPipeline (Next-Gen) initialized for public in 2.08s
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://localhost:8001 (Press CTRL+C to quit)

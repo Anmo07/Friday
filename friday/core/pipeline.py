@@ -50,60 +50,9 @@ class SemanticTurnDetector:
             return True
         return False
 
-class TelemetryManager:
-    """
-    Tracks FLOPs, energy consumption, and dollar cost per query.
-    Feeds data back into MoE router for dynamic scaling.
-    """
-    def __init__(self):
-        self.stats = {
-            "total_flops": 0,
-            "total_energy_joules": 0.0,
-            "total_cost_usd": 0.0,
-            "battery_level": 1.0,
-            "avg_latency_ms": 0.0,
-            "query_count": 0
-        }
-        self._load_hardware_baseline()
+from .observability import TelemetryManager
 
-    def _load_hardware_baseline(self):
-        import psutil
-        # Mock baseline for M1/M2/M3 or NVIDIA cards
-        self.is_on_battery = getattr(psutil.sensors_battery(), 'power_plugged', True) == False
-        self.battery_percent = getattr(psutil.sensors_battery(), 'percent', 100.0) / 100.0
-
-    def track_query_efficiency(self, tier: str, model: str, duration_ms: float):
-        import psutil
-        # Update battery state
-        battery = psutil.sensors_battery()
-        if battery:
-            self.stats["battery_level"] = battery.percent / 100.0
-            self.is_on_battery = not battery.power_plugged
-        
-        # Estimate FLOPs (Roughly: Parameters * 2 per token * tokens)
-        # Using a fixed multiplier for demo
-        param_count = 3e9 if "phi3" in model or "3b" in model else 8e9
-        estimated_tokens = (duration_ms / 1000) * 20 # Assume 20 t/s
-        flops_estimate = param_count * 2 * estimated_tokens
-        
-        # Energy: 10W-30W for Laptop inference
-        power_draw = 15.0 if self.is_on_battery else 30.0
-        energy_estimate = (duration_ms / 1000) * power_draw
-        
-        self.stats["total_flops"] += flops_estimate
-        self.stats["total_energy_joules"] += energy_estimate
-        self.stats["query_count"] += 1
-        self.stats["avg_latency_ms"] = (self.stats["avg_latency_ms"] * (self.stats["query_count"] - 1) + duration_ms) / self.stats["query_count"]
-        
-        logger.info(f"Telemetry: {model} | {duration_ms:.0f}ms | {energy_estimate:.2f}J | Battery: {self.stats['battery_level']*100:.0f}%")
-
-    def get_scaling_factor(self) -> float:
-        """Returns a multiplier for thresholding based on hardware constraints."""
-        if self.stats["battery_level"] < 0.15:
-            return 0.4  # Ultra-saver mode
-        if self.stats["battery_level"] < 0.3 or self.is_on_battery:
-            return 0.7  # Balanced mode
-        return 1.0
+    async def retrieve_vector(self, query: str): return await self.vector_db.asimilarity_search(query)
 
 class EmotionEngine:
     """
@@ -207,7 +156,8 @@ class FridayPipeline:
         
         # Phase 2: WebRTC Transport (Pipecat/LiveKit Integration)
         self.rtc_transport = self._init_webrtc_transport()
-        self.sv_model = self._init_funasr_sv()
+        self._sv_model = None
+        self._sv_lock = asyncio.Lock()
         
         # Load persistent memory
         persisted = load_session_memory(self.owner_email)
@@ -237,18 +187,30 @@ class FridayPipeline:
         # Mock initialization for demonstration
         return {"status": "ready", "protocol": "WebRTC", "latency": "ultra-low"}
 
-    def _init_funasr_sv(self):
-        """Initializes Fun-ASR Speaker Verification."""
-        try:
-            from funasr import AutoModel
-            return AutoModel(model="damo/speech_campplus_sv_en_16k_common", device="cpu")
-        except ImportError:
-            logger.warning("Fun-ASR not installed. Speaker Verification will be limited.")
-            return None
+    async def get_sv_model(self):
+        """Lazy-loads and returns the Fun-ASR Speaker Verification model."""
+        if self._sv_model is not None:
+            return self._sv_model
+        
+        async with self._sv_lock:
+            if self._sv_model is not None:
+                return self._sv_model
+            
+            try:
+                from funasr import AutoModel
+                def _load():
+                    return AutoModel(model="iic/speech_campplus_sv_en_voxceleb_16k", device="cpu")
+                
+                self._sv_model = await asyncio.to_thread(_load)
+                return self._sv_model
+            except Exception as e:
+                logger.warning(f"Fun-ASR model load failed: {e}")
+                return None
 
     async def verify_user(self, audio_bytes: bytes) -> bool:
         """Verifies if the audio belongs to the authorized user."""
-        if not self.sv_model: return True
+        sv_model = await self.get_sv_model()
+        if not sv_model: return True
         # Demo logic: in production, compare against stored embeddings
         return True
 
@@ -480,7 +442,7 @@ class FridayPipeline:
         return await llm.ainvoke(f"Verified: {d}")
 
     async def stream_run(self, query: str, voice_mode: bool = False) -> AsyncGenerator[str, None]:
-        tier = await self.classify(query)
+        tier, intent = await self.classify(query)
         
         # Select model based on tier
         model = "phi3:mini"

@@ -62,7 +62,7 @@ class VoiceListener:
             "FRIDAY_VOICE_KEYCHAIN_ACCOUNT", "authorized-speaker"
         )
         self.sv_model_id = os.getenv(
-            "FRIDAY_SV_MODEL", "damo/speech_eres2net_sv_en_voxceleb_16k"
+            "FRIDAY_SV_MODEL", "iic/speech_campplus_sv_en_voxceleb_16k"
         )
         self.sv_similarity_threshold = float(
             os.getenv("FRIDAY_SV_THRESHOLD", "0.45")

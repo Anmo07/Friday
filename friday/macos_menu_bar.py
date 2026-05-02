@@ -32,14 +32,17 @@ from AppKit import (
     NSVisualEffectMaterialDark,
     NSVisualEffectView,
     NSWindow,
-    NSWindowLevel,
+    NSStatusWindowLevel,
     NSWindowStyleMaskBorderless,
 )
 from PyObjCTools.AppHelper import callAfter
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "friday"))
+
+import nest_asyncio
+nest_asyncio.apply()
 
 from friday.app.core.config import settings
 from friday.app.voice.listener import listener
@@ -48,6 +51,10 @@ from friday.core.startup_validation import validate_startup
 
 LOG_DIR = ROOT / "logs"
 LOG_DIR.mkdir(exist_ok=True)
+# Clear existing handlers to ensure our basicConfig takes effect
+for handler in logging.root.handlers[:]:
+    logging.root.removeHandler(handler)
+
 logging.basicConfig(
     filename=str(LOG_DIR / "menubar.log"),
     level=logging.INFO,
@@ -73,7 +80,7 @@ class SiriResponseWindow(NSWindow):
         if self:
             self.setOpaque_(False)
             self.setBackgroundColor_(NSColor.clearColor())
-            self.setLevel_(NSWindowLevel + 1)
+            self.setLevel_(NSStatusWindowLevel)
             self.setHasShadow_(True)
             self.setIgnoresMouseEvents_(True)
 
@@ -160,29 +167,54 @@ class FridayMenuBar(rumps.App):
         self.window.orderFrontRegardless()
 
     def _run_loop(self):
+        """Main entry point for the background thread's event loop."""
         asyncio.set_event_loop(self.loop)
+        # nest_asyncio is critical for supporting nested loops (e.g. within certain libraries)
+        nest_asyncio.apply(self.loop)
+        
         self.loop.create_task(self._bootstrap())
-        self.loop.run_forever()
+        try:
+            self.loop.run_forever()
+        except Exception as e:
+            logger.error(f"Event loop died: {e}", exc_info=True)
 
     async def _bootstrap(self):
+        """Initializes the backend, validates services, and starts the acoustic monitor."""
+        if hasattr(self, "_bootstrapping") and self._bootstrapping:
+            return
+        self._bootstrapping = True
+        
         self.client = httpx.AsyncClient(
             timeout=httpx.Timeout(connect=4.0, read=None, write=30.0, pool=5.0)
         )
         try:
-            await validate_startup()
+            # 1. Validate Ollama and local models
+            success = await validate_startup()
+            if not success:
+                logger.error("Startup validation failed.")
+                return
+
+            # 2. Sync with Backend (Auto-start if needed)
             await self._ensure_backend_ready()
-            await listener.start(self.process_audio)
+            
+            # 3. Ignite Acoustic Monitor
+            if not listener.is_running:
+                await listener.start(self.process_audio)
+            
             self._set_state(
                 FridayState.LISTENING
                 if listener.has_voice_profile
                 else FridayState.LOCKED
             )
             self._update_security_status(listener.has_voice_profile)
+            logger.info("Friday Engine is now fully operational.")
         except Exception as exc:
-            logger.error("Bootstrap failure: %s", exc, exc_info=True)
-            self._set_overlay_text("Startup failed.")
+            logger.error("Engine failure during bootstrap: %s", exc, exc_info=True)
+            self._set_overlay_text("Engine failure.")
             self._set_overlay_visible(True)
-            rumps.notification("Friday", "Startup Failed", str(exc)[:120])
+            rumps.notification("Friday Engine", "Bootstrap Error", str(exc)[:120])
+        finally:
+            self._bootstrapping = False
 
     async def _ensure_backend_ready(self):
         if await self._backend_healthcheck():
@@ -204,6 +236,7 @@ class FridayMenuBar(rumps.App):
         ).rstrip(os.pathsep)
         if not self.api_key:
             env["ALLOW_ANONYMOUS_QUERY_ENDPOINT"] = "true"
+        env["FRIDAY_PARENT_PID"] = str(os.getpid())
 
         self.backend_log_handle = open(LOG_DIR / "backend.log", "a", encoding="utf-8")
         self.backend_process = subprocess.Popen(
