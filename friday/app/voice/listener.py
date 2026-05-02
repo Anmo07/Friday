@@ -128,12 +128,13 @@ class VoiceListener:
         
         # Access the AntigravityPipeline singleton for Semantic Turn Detection
         from core.pipeline import FridayPipeline
-        pipeline = FridayPipeline() # Assuming singleton pattern or similar initialization
+        from app.voice.stt_service import stt_service
+        pipeline = FridayPipeline()
         
         max_duration_chunks = int(10.0 * self.sample_rate / self.chunk_size)
-        transcription_buffer = "" # Mock for incremental transcription
+        transcription_buffer = ""
         
-        for _ in range(max_duration_chunks):
+        for i in range(max_duration_chunks):
             if not self._running:
                 break
             try:
@@ -150,23 +151,22 @@ class VoiceListener:
                 audio_bytes = audio_data.tobytes()
                 chunks.append(audio_bytes)
                 
+                # Periodically update transcription buffer for semantic turn detection
+                if i > 0 and i % 10 == 0: # Every ~600ms
+                    transcription_buffer = await stt_service.transcribe(b"".join(chunks))
+                
                 # Phase 1: Semantic Turn Detection
-                # Replace simplistic 3.0s silence timeout with predictive model
                 is_turn_complete = await pipeline.turn_detector.predict_end_of_thought(
                     audio_bytes, transcription_buffer
                 )
                 
-                if is_turn_complete:
-                    logger.info("Semantic Turn Detected: User finished thought.")
+                if is_turn_complete and len(transcription_buffer.strip()) > 0:
+                    logger.info(f"Semantic Turn Detected. Transcription: {transcription_buffer}")
                     break
-                
-                # Check for Barge-in (interruption while Friday speaks)
-                # In a real impl, this would check if Friday's TTS is active
                 
                 rms = self._calculate_rms(audio_bytes)
                 if rms < self.energy_threshold * 0.3:
                     silence_count += 1
-                    # Legacy fallback for safety
                     if silence_count >= int(self.silence_timeout * self.sample_rate / self.chunk_size):
                         break
                 else:

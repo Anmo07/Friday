@@ -93,7 +93,18 @@ class LearningLayer:
             json.dump(trace, f)
 
 class FridayPipeline:
+    _instance = None
+    _initialized = False
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(FridayPipeline, cls).__new__(cls)
+        return cls._instance
+
     def __init__(self, owner_email: str = "public"):
+        if FridayPipeline._initialized:
+            return
+        
         t0 = time.monotonic()
         from core.mcp_manager import mcp_manager
         self.owner_email = owner_email
@@ -131,13 +142,17 @@ class FridayPipeline:
         # Load MoE Schema
         self.moe_config = self._load_moe_schema()
         
+        FridayPipeline._initialized = True
         logger.info(f"AntigravityPipeline (Next-Gen) initialized for {self.owner_email} in {time.monotonic() - t0:.2f}s")
 
     def _load_moe_schema(self) -> Dict:
-        config_path = "/Users/anmol/Downloads/Developer/Friday/config/moe_schema.yaml"
+        # Use a more portable way to find the config file
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        config_path = os.path.join(base_dir, "..", "config", "moe_schema.yaml")
         if os.path.exists(config_path):
             with open(config_path, "r") as f:
                 return yaml.safe_load(f)
+        logger.warning(f"MoE schema not found at {config_path}. Using empty config.")
         return {}
 
     def _build_semantic_router(self) -> RouteLayer:
@@ -153,8 +168,13 @@ class FridayPipeline:
         scaling_factor = self.telemetry.get_scaling_factor()
         
         try:
+            # semantic-router's RouteLayer __call__ is synchronous, so we run in thread
             route = await asyncio.to_thread(self.router, query)
-            tier = route.name if route.name else "tier_2_standard"
+            
+            if route and hasattr(route, 'name') and route.name:
+                tier = route.name
+            else:
+                tier = "tier_2_standard"
             
             # Dynamic scaling: Downgrade tier if battery is low
             if scaling_factor < 0.6 and tier == "tier_3_deep":
@@ -278,8 +298,15 @@ class FridayPipeline:
 
     async def stream_run(self, query: str, voice_mode: bool = False) -> AsyncGenerator[str, None]:
         tier = await self.classify(query)
-        prompt = f"System: {query}"
+        
+        # Select model based on tier
         model = "phi3:mini"
+        if tier == "tier_3_deep":
+            model = "llama3.1:8b-instruct"
+        elif tier == "tier_2_standard":
+            model = "llama3.1:8b"
+            
+        prompt = f"System: {query}"
         yield self._sse_event("meta", {"tier": tier, "model": model})
         async for token in self._stream_ollama(prompt, model):
             yield self._sse_event("token", {"t": token})
