@@ -247,11 +247,13 @@ class FridayMenuBar(rumps.App):
             
             self._set_state(
                 FridayState.LISTENING
-                if listener.has_voice_profile
-                else FridayState.LOCKED
             )
             self._update_security_status(listener.has_voice_profile)
             logger.info("Friday Engine is now fully operational.")
+            
+            # Diagnostic: Check for dead mic
+            if listener.current_rms < 10 and not listener.is_running:
+                 logger.warning("Microphone seems silent (RMS < 10). Check permissions.")
         except Exception as exc:
             logger.error("Engine failure during bootstrap: %s", exc, exc_info=True)
             self._set_overlay_text("Engine failure.")
@@ -457,8 +459,6 @@ class FridayMenuBar(rumps.App):
                 if not text.strip():
                     self._set_state(
                         FridayState.LISTENING
-                        if listener.has_voice_profile
-                        else FridayState.LOCKED
                     )
                     self._set_overlay_visible(False)
                     return
@@ -470,8 +470,6 @@ class FridayMenuBar(rumps.App):
                 self._set_overlay_visible(False)
                 self._set_state(
                     FridayState.LISTENING
-                    if listener.has_voice_profile
-                    else FridayState.LOCKED
                 )
 
     async def execute_pipeline(self, text: str):
@@ -517,7 +515,7 @@ class FridayMenuBar(rumps.App):
             await asyncio.sleep(1.2)
             self._set_overlay_visible(False)
             self._set_state(
-                FridayState.LISTENING if listener.has_voice_profile else FridayState.LOCKED
+                FridayState.LISTENING
             )
 
     async def _stream_response_events(self, query: str):
@@ -672,7 +670,7 @@ class FridayMenuBar(rumps.App):
         target_state = (
             FridayState.IDLE
             if not self.listening_enabled
-            else (FridayState.LISTENING if listener.has_voice_profile else FridayState.LOCKED)
+            else (FridayState.LISTENING)
         )
         self._set_state(target_state)
 
