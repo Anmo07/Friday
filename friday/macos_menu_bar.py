@@ -28,6 +28,7 @@ from AppKit import (
     NSColor,
     NSFont,
     NSFontWeightMedium,
+    NSFontWeightRegular,
     NSImage,
     NSImageView,
     NSLineBreakByWordWrapping,
@@ -35,11 +36,17 @@ from AppKit import (
     NSTextAlignmentCenter,
     NSTextField,
     NSVisualEffectBlendingModeBehindWindow,
-    NSVisualEffectMaterialDark,
+    NSVisualEffectMaterialSidebar,
     NSVisualEffectView,
     NSWindow,
     NSStatusWindowLevel,
     NSWindowStyleMaskBorderless,
+    NSWindowStyleMaskFullSizeContentView,
+)
+from Quartz import (
+    CAGradientLayer,
+    CALayer,
+    kCAGravityCenter,
 )
 from PyObjCTools.AppHelper import callAfter
 
@@ -86,24 +93,43 @@ class SiriResponseWindow(NSWindow):
         if self:
             self.setOpaque_(False)
             self.setBackgroundColor_(NSColor.clearColor())
-            self.setLevel_(NSStatusWindowLevel)
+            self.setLevel_(NSStatusWindowLevel + 1)
             self.setHasShadow_(True)
             self.setIgnoresMouseEvents_(True)
+            self.setMovableByWindowBackground_(False)
+            self.setCollectionBehavior_(1 << 0 | 1 << 6)  # NSWindowCollectionBehaviorCanJoinAllSpaces | NSWindowCollectionBehaviorFullScreenAuxiliary
 
+            # Liquid Glass Effect View
             self.blur = NSVisualEffectView.alloc().init()
-            self.blur.setMaterial_(NSVisualEffectMaterialDark)
+            self.blur.setMaterial_(NSVisualEffectMaterialSidebar)
             self.blur.setBlendingMode_(NSVisualEffectBlendingModeBehindWindow)
+            self.blur.setState_(1)  # NSVisualEffectStateActive
             self.blur.setWantsLayer_(True)
-            self.blur.layer().setCornerRadius_(22.0)
+            self.blur.layer().setCornerRadius_(28.0)
+            self.blur.layer().setMasksToBounds_(True)
+            self.blur.layer().setBorderWidth_(0.5)
+            self.blur.layer().setBorderColor_(NSColor.colorWithWhite_alpha_(1.0, 0.2).CGColor())
+            
+            # Subtle Gloss/Liquid Gradient
+            self.gloss = CAGradientLayer.layer()
+            self.gloss.setColors_([
+                NSColor.colorWithWhite_alpha_(1.0, 0.1).CGColor(),
+                NSColor.colorWithWhite_alpha_(1.0, 0.0).CGColor(),
+                NSColor.colorWithWhite_alpha_(1.0, 0.05).CGColor(),
+            ])
+            self.gloss.setLocations_([0.0, 0.5, 1.0])
+            self.blur.layer().addSublayer_(self.gloss)
+            
             self.setContentView_(self.blur)
 
-            self.label = NSTextField.alloc().initWithFrame_(((28, 24), (424, 96)))
+            # Responsive Text Label
+            self.label = NSTextField.alloc().initWithFrame_(((30, 20), (420, 40)))
             self.label.setEditable_(False)
             self.label.setSelectable_(False)
             self.label.setBordered_(False)
             self.label.setDrawsBackground_(False)
             self.label.setTextColor_(NSColor.whiteColor())
-            self.label.setFont_(NSFont.systemFontOfSize_weight_(20, NSFontWeightMedium))
+            self.label.setFont_(NSFont.systemFontOfSize_weight_(19, NSFontWeightRegular))
             self.label.setAlignment_(NSTextAlignmentCenter)
             self.label.setLineBreakMode_(NSLineBreakByWordWrapping)
             self.label.setUsesSingleLineMode_(False)
@@ -111,6 +137,11 @@ class SiriResponseWindow(NSWindow):
             self.label.setStringValue_("")
             self.blur.addSubview_(self.label)
         return self
+
+    def layout(self):
+        super().layout()
+        if hasattr(self, "gloss"):
+            self.gloss.setFrame_(self.blur.bounds())
 
 
 class FridayMenuBar(rumps.App):
@@ -153,10 +184,11 @@ class FridayMenuBar(rumps.App):
 
     def _setup_native_overlay(self):
         screen = NSScreen.mainScreen().visibleFrame()
-        width, height = 480, 168
+        self.default_width = 480
+        self.min_height = 140
         rect = (
-            (screen.origin.x + screen.size.width / 2 - width / 2, screen.origin.y + 120),
-            (width, height),
+            (screen.origin.x + screen.size.width / 2 - self.default_width / 2, screen.origin.y + 100),
+            (self.default_width, self.min_height),
         )
 
         self.window = SiriResponseWindow.alloc().initWithContentRect_styleMask_backing_defer_(
@@ -166,7 +198,8 @@ class FridayMenuBar(rumps.App):
             False,
         )
 
-        self.orb_view = NSImageView.alloc().initWithFrame_(((width / 2 - 40, 102), (80, 80)))
+        # Orb at the top
+        self.orb_view = NSImageView.alloc().initWithFrame_(((self.default_width / 2 - 35, self.min_height - 65), (70, 70)))
         icon_path = ROOT / "friday" / "assets" / "orb_icon_processed.png"
         if icon_path.exists():
             image = NSImage.alloc().initByReferencingFile_(str(icon_path))
@@ -308,6 +341,25 @@ class FridayMenuBar(rumps.App):
     def _set_state(self, state: FridayState):
         self.state = state
         callAfter(self._set_status_title, f"Neural Status: {state.value.title()}")
+        
+        # Update menu bar title for quick glance
+        status_text = ""
+        if state == FridayState.LISTENING: status_text = "󰔊" # Mic icon or similar
+        elif state == FridayState.PROCESSING: status_text = "󰑭" # Thinking
+        elif state == FridayState.RESPONDING: status_text = "󰓃" # Speaking
+        
+        # We can also just use text if symbols aren't supported
+        titles = {
+            FridayState.LISTENING: "FRIDAY (Live)",
+            FridayState.PROCESSING: "FRIDAY (Thinking...)",
+            FridayState.RESPONDING: "FRIDAY (Speaking...)",
+            FridayState.LOCKED: "FRIDAY (Locked)",
+            FridayState.IDLE: "FRIDAY"
+        }
+        callAfter(self._set_app_title, titles.get(state, "FRIDAY"))
+
+    def _set_app_title(self, title: str):
+        self.title = title
 
     def _set_status_title(self, title: str):
         self.status_item.title = title
@@ -321,11 +373,29 @@ class FridayMenuBar(rumps.App):
 
     def _set_overlay_visible(self, visible: bool):
         def _animate():
-            self.window.animator().setAlphaValue_(1.0 if visible else 0.0)
+            alpha = 1.0 if visible else 0.0
+            self.window.animator().setAlphaValue_(alpha)
             if visible:
                 self._update_orb_animation()
+            else:
+                # Reset window size when hiding
+                self._update_window_height(self.min_height)
 
         callAfter(_animate)
+
+    def _update_window_height(self, new_height: float):
+        frame = self.window.frame()
+        diff = new_height - frame.size.height
+        if abs(diff) < 2:
+            return
+            
+        new_origin_y = frame.origin.y - diff / 2 # Expand from center/bottom
+        new_frame = ((frame.origin.x, frame.origin.y), (frame.size.width, new_height))
+        
+        # Adjust orb and label positions
+        self.window.setFrame_display_animate_(new_frame, True, True)
+        self.orb_view.setFrame_(((self.default_width / 2 - 35, new_height - 65), (70, 70)))
+        self.window.label.setFrame_(((30, 25), (420, new_height - 85)))
 
     def _update_orb_animation(self):
         if not hasattr(self, "orb_view") or not self.orb_view:
@@ -356,7 +426,20 @@ class FridayMenuBar(rumps.App):
             layer.addAnimation_forKey_(rotate, "rotate")
 
     def _set_overlay_text(self, text: str):
-        callAfter(self.window.label.setStringValue_, text)
+        def _update():
+            self.window.label.setStringValue_(text)
+            
+            # Calculate required height
+            field_editor = self.window.label.cell().fieldEditorForView_(self.window.label)
+            available_size = (420, 1000) # Max height
+            ideal_size = self.window.label.cell().cellSizeForBounds_(((0, 0), available_size))
+            
+            new_height = max(self.min_height, ideal_size.height + 100) # padding for orb
+            if new_height > 600: new_height = 600 # Cap height
+            
+            self._update_window_height(new_height)
+            
+        callAfter(_update)
 
     async def process_audio(self, audio_bytes: bytes):
         if not self.listening_enabled:
@@ -485,13 +568,20 @@ class FridayMenuBar(rumps.App):
                 if not cleaned:
                     continue
 
+                logger.info(f"Reciting: {cleaned[:50]}...")
                 self._set_state(FridayState.RESPONDING)
                 audio_path = await self._fetch_tts_audio(cleaned)
                 if not audio_path:
+                    logger.warning("Failed to fetch TTS audio")
                     continue
                 try:
+                    # Use afplay but with logging
+                    logger.info(f"Playing audio from {audio_path}")
                     process = await asyncio.create_subprocess_exec("afplay", audio_path)
                     await process.wait()
+                    logger.info("Playback finished")
+                except Exception as e:
+                    logger.error(f"Playback failed: {e}")
                 finally:
                     try:
                         os.unlink(audio_path)

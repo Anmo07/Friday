@@ -9,3 +9,30 @@
 2026-05-02 22:24:24,774 [INFO] friday.macos_menu_bar: Friday Engine is now fully operational.
 2026-05-02 22:24:24,774 [INFO] friday.app.voice.listener: Opening input stream at 48000Hz.
 2026-05-02 22:24:24,870 [INFO] friday.app.voice.listener: Input stream active. Waiting for double clap or wake phrase.
+2026-05-03 00:25:45,823 [INFO] friday.core.startup_validation: Starting startup validation...
+2026-05-03 00:25:46,222 [INFO] core.service_registry: All services are healthy.
+2026-05-03 00:25:46,228 [INFO] friday.core.startup_validation: Startup validation complete.
+2026-05-03 00:25:46,234 [INFO] httpx: HTTP Request: GET http://localhost:8001/api/v1/health "HTTP/1.1 200 OK"
+2026-05-03 00:25:46,316 [INFO] friday.app.voice.listener: Calibrating microphone for 1.0s of ambient audio.
+2026-05-03 00:25:47,511 [INFO] friday.app.voice.listener: Calibration complete. Ambient RMS 162, threshold 800.
+2026-05-03 00:25:47,511 [INFO] friday.app.voice.listener: Voice listener started.
+2026-05-03 00:25:47,512 [INFO] friday.macos_menu_bar: Friday Engine is now fully operational.
+2026-05-03 00:25:47,512 [INFO] friday.app.voice.listener: Opening input stream at 48000Hz.
+2026-05-03 00:25:47,606 [INFO] friday.app.voice.listener: Input stream active. Waiting for double clap or wake phrase.
+2026-05-03 00:25:49,590 [INFO] friday.app.voice.stt_service: Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
+2026-05-03 00:25:50,398 [INFO] friday.app.voice.stt_service: Loading Whisper large-v3-turbo...
+2026-05-03 00:25:50,883 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/models/mobiuslabsgmbh/faster-whisper-large-v3-turbo/revision/main "HTTP/1.1 307 Temporary Redirect"
+2026-05-03 00:25:51,192 [INFO] httpx: HTTP Request: GET https://huggingface.co/api/models/dropbox-dash/faster-whisper-large-v3-turbo/revision/main "HTTP/1.1 200 OK"
+2026-05-03 00:25:53,072 [INFO] faster_whisper: Processing audio with duration 00:00.575
+2026-05-03 00:25:53,170 [INFO] faster_whisper: VAD filter removed 00:00.144 of audio
+2026-05-03 00:26:41,193 [INFO] friday.core.startup_validation: Starting startup validation...
+2026-05-03 00:26:41,429 [INFO] core.service_registry: All services are healthy.
+2026-05-03 00:26:41,434 [INFO] friday.core.startup_validation: Startup validation complete.
+2026-05-03 00:26:41,439 [INFO] httpx: HTTP Request: GET http://localhost:8001/api/v1/health "HTTP/1.1 200 OK"
+2026-05-03 00:26:41,544 [INFO] friday.app.voice.listener: Calibrating microphone for 1.0s of ambient audio.
+2026-05-03 00:26:42,843 [INFO] friday.app.voice.listener: Calibration complete. Ambient RMS 0, threshold 800.
+2026-05-03 00:26:42,843 [INFO] friday.app.voice.listener: Voice listener started.
+2026-05-03 00:26:42,844 [INFO] friday.macos_menu_bar: Friday Engine is now fully operational.
+2026-05-03 00:26:42,845 [INFO] friday.app.voice.listener: Opening input stream at 48000Hz.
+2026-05-03 00:26:42,996 [INFO] friday.app.voice.listener: Input stream active. Waiting for double clap or wake phrase.
+2026-05-03 00:29:20,897 [INFO] friday.app.voice.listener: Voice listener stopped.
