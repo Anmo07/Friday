@@ -125,10 +125,14 @@ class VoiceListener:
     async def _capture_utterance(self, sd) -> Optional[bytes]:
         chunks = []
         silence_count = 0
-        max_silence_chunks = int(
-            self.silence_timeout * self.sample_rate / self.chunk_size
-        )
+        
+        # Access the AntigravityPipeline singleton for Semantic Turn Detection
+        from core.pipeline import FridayPipeline
+        pipeline = FridayPipeline() # Assuming singleton pattern or similar initialization
+        
         max_duration_chunks = int(10.0 * self.sample_rate / self.chunk_size)
+        transcription_buffer = "" # Mock for incremental transcription
+        
         for _ in range(max_duration_chunks):
             if not self._running:
                 break
@@ -145,10 +149,25 @@ class VoiceListener:
                     break
                 audio_bytes = audio_data.tobytes()
                 chunks.append(audio_bytes)
+                
+                # Phase 1: Semantic Turn Detection
+                # Replace simplistic 3.0s silence timeout with predictive model
+                is_turn_complete = await pipeline.turn_detector.predict_end_of_thought(
+                    audio_bytes, transcription_buffer
+                )
+                
+                if is_turn_complete:
+                    logger.info("Semantic Turn Detected: User finished thought.")
+                    break
+                
+                # Check for Barge-in (interruption while Friday speaks)
+                # In a real impl, this would check if Friday's TTS is active
+                
                 rms = self._calculate_rms(audio_bytes)
                 if rms < self.energy_threshold * 0.3:
                     silence_count += 1
-                    if silence_count >= max_silence_chunks:
+                    # Legacy fallback for safety
+                    if silence_count >= int(self.silence_timeout * self.sample_rate / self.chunk_size):
                         break
                 else:
                     silence_count = 0

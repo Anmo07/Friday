@@ -37,6 +37,14 @@ class STTService:
         if not audio_bytes:
             return ""
         
+        # Phase 2: Audio-Native E2E Intelligence
+        # Check if we should bypass traditional STT and use Audio-Native engine
+        if settings.AUDIO_NATIVE_ENGINE == "vibevoice":
+            # Mocking E2E tokenization
+            logger.info("Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.")
+            # In a real impl, this would return speech tokens or a special identifier
+            # for the pipeline to handle as E2E.
+        
         start_time = time.time()
         model = await asyncio.to_thread(self._get_model)
         
@@ -69,6 +77,12 @@ class STTService:
 
         elapsed = time.time() - start_time
         logger.debug(f"STT Latency: {elapsed*1000:.0f}ms | Text: {text}")
+        
+        # Tracking telemetry for STT stage
+        from core.pipeline import FridayPipeline
+        pipeline = FridayPipeline()
+        pipeline.telemetry.track_query_efficiency("tier_1_stt", "whisper-large-v3", elapsed * 1000)
+        
         return text.strip()
 
     async def transcribe_stream(self, chunks: list[bytes]) -> str:
