@@ -99,41 +99,51 @@ class VoiceListener:
         def audio_callback(indata, frames, time, status):
             queue.put_nowait(indata.copy())
 
-        # Clap and Wake detection state
+        # Neural Monitor State
+        self.current_rms = 0.0
+        self.ambient_rms_rolling = self.energy_threshold
         last_clap_time = 0
         audio_buffer = []
 
         try:
             with sd.InputStream(samplerate=self.sample_rate, channels=1, dtype='int16', 
                               blocksize=self.chunk_size, callback=audio_callback):
+                logger.info("InputStream active. Acoustic monitor live.")
                 while self._running:
                     audio_chunk = await queue.get()
                     audio_bytes = audio_chunk.tobytes()
-                    rms = self._calculate_rms(audio_bytes)
+                    self.current_rms = self._calculate_rms(audio_bytes)
                     
+                    # Update rolling ambient floor (slowly follow silence)
+                    if self.current_rms < self.energy_threshold:
+                        self.ambient_rms_rolling = self.ambient_rms_rolling * 0.95 + self.current_rms * 0.05
+
                     # Rolling buffer for wake word
                     audio_buffer.append(audio_bytes)
-                    if len(audio_buffer) > 20: audio_buffer.pop(0) # Keep ~1.2s
+                    if len(audio_buffer) > 20: audio_buffer.pop(0)
 
-                    # 1. Precise Double Clap Detection
-                    if rms > self.energy_threshold * 5.0:
+                    # 1. Improved Double Clap Detection
+                    # Look for spikes at least 3x the current rolling ambient floor
+                    if self.current_rms > self.ambient_rms_rolling * 3.5:
                         now = time.time()
-                        if 0.1 < (now - last_clap_time) < 0.6:
-                            logger.info("Double Clap Verified. Activating...")
+                        if 0.1 < (now - last_clap_time) < 0.7:
+                            logger.info(f"Double Clap Detected (RMS: {self.current_rms:.0f}). Activating...")
                             full_audio = await self._capture_utterance_from_queue(queue, b"")
                             if full_audio and self._callback: await self._callback(full_audio)
                             last_clap_time = 0
                         else:
                             last_clap_time = now
+                        # Skip wake word check if we're processing a clap
                         continue
 
                     # 2. Continuous Wake Word Verification
-                    if rms > self.energy_threshold and len(audio_buffer) >= 10:
+                    # Trigger STT only if energy is significantly above ambient
+                    if self.current_rms > self.ambient_rms_rolling * 1.5 and len(audio_buffer) >= 8:
                         if await self._is_wake_word(b"".join(audio_buffer)):
-                            logger.info("Wake word detected.")
+                            logger.info(f"Wake Word Detected (RMS: {self.current_rms:.0f}).")
                             full_audio = await self._capture_utterance_from_queue(queue, b"")
                             if full_audio and self._callback: await self._callback(full_audio)
-                            audio_buffer = [] # Reset buffer
+                            audio_buffer = [] 
                     
                     await asyncio.sleep(0.01)
         except Exception as e:

@@ -53,6 +53,7 @@ class FridayMenuBarApp(rumps.App):
         
         self.menu = [
             rumps.MenuItem("Neural Status: Active", callback=None),
+            rumps.MenuItem("Acoustic Levels: 0/0", callback=None),
             None,
             rumps.MenuItem("Start at Login", callback=self.toggle_login_item),
             rumps.MenuItem("Pause Acoustic Monitor", callback=self.toggle_listening),
@@ -60,6 +61,14 @@ class FridayMenuBarApp(rumps.App):
             None,
             rumps.MenuItem("Friday Intelligence v0.2.0", callback=self.about),
         ]
+        
+        # Timer for debug text
+        self.debug_timer = rumps.Timer(self._update_debug_text, 0.5)
+        self.debug_timer.start()
+
+    def _update_debug_text(self, _):
+        from app.voice.listener import listener
+        self.menu["Acoustic Levels: 0/0"].title = f"Neural Signal: {int(listener.current_rms)} / {int(listener.ambient_rms_rolling)}"
         
         # Initialize Native Overlay
         self._setup_native_overlay()
@@ -95,19 +104,27 @@ class FridayMenuBarApp(rumps.App):
         self.window.orderFrontRegardless()
 
     def _update_ui(self, active=True):
+        from app.voice.listener import listener
         def _animate():
             target_alpha = 0.9 if active else 0.0
             self.window.animator().setAlphaValue_(target_alpha)
             
             if active:
+                # Siri-like Audio-Visual Binding: Reactive to real-time volume
+                rms_norm = min(listener.current_rms / 5000.0, 1.0)
+                scale = 1.0 + (rms_norm * 0.4) # Grow up to 140%
+                
+                # Apply scale and opacity modulation
+                self.view.setAlphaValue_(0.7 + 0.3 * rms_norm)
+                
                 if self.state == FridayState.PROCESSING:
+                    # Neural Pulse animation
                     self.view.setAlphaValue_(0.5 + 0.4 * abs(time.time() % 1 - 0.5))
                 elif self.state == FridayState.RESPONDING:
+                    # Shimmer animation
                     self.view.setAlphaValue_(0.8 + 0.2 * abs(time.time() % 0.4 - 0.2))
-                else:
-                    self.view.setAlphaValue_(1.0)
         
-        rumps.Timer(lambda _: _animate(), 0.01).start()
+        rumps.Timer(lambda _: _animate(), 0.05).start()
 
     def start_backend(self):
         try:

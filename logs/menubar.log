@@ -146,3 +146,15 @@ INFO:faster_whisper:VAD filter removed 00:00.656 of audio
 INFO:app.voice.stt_service:Using VibeVoice 7.5Hz tokenizers for Audio-Native Tier.
 INFO:faster_whisper:Processing audio with duration 00:01.280
 INFO:faster_whisper:VAD filter removed 00:00.464 of audio
+INFO:core.pipeline:SemanticTurnDetector initialized.
+INFO:core.pipeline:AntigravityPipeline (Next-Gen) initialized for public in 4.79s
+INFO:core.startup_validation:Starting startup validation...
+INFO:core.service_registry:All services are healthy.
+INFO:core.startup_validation:Startup validation complete.
+INFO:app.voice.listener:Calibrating microphone... please be quiet.
+INFO:app.voice.listener:Calibration complete. Ambient RMS: 172, New threshold: 800
+INFO:app.voice.listener:Voice listener started
+INFO:app.voice.listener:Initializing neural acoustic monitor...
+WARNING:huggingface_hub.utils._http:Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+INFO:core.pipeline:SemanticTurnDetector initialized.
+INFO:core.pipeline:AntigravityPipeline (Next-Gen) initialized for public in 4.20s
