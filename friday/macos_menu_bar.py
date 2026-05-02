@@ -17,6 +17,12 @@ from urllib.parse import urlparse, urlunparse
 import httpx
 import objc
 import rumps
+import math
+from Quartz import (
+    CABasicAnimation,
+    CAMediaTimingFunction,
+    kCAMediaTimingFunctionEaseInEaseOut,
+)
 from AppKit import (
     NSBackingStoreBuffered,
     NSColor,
@@ -148,7 +154,10 @@ class FridayMenuBar(rumps.App):
     def _setup_native_overlay(self):
         screen = NSScreen.mainScreen().visibleFrame()
         width, height = 480, 168
-        rect = ((screen.size.width / 2 - width / 2, 96), (width, height))
+        rect = (
+            (screen.origin.x + screen.size.width / 2 - width / 2, screen.origin.y + 120),
+            (width, height),
+        )
 
         self.window = SiriResponseWindow.alloc().initWithContentRect_styleMask_backing_defer_(
             rect,
@@ -157,11 +166,13 @@ class FridayMenuBar(rumps.App):
             False,
         )
 
-        self.orb_view = NSImageView.alloc().initWithFrame_(((200, 102), (80, 80)))
+        self.orb_view = NSImageView.alloc().initWithFrame_(((width / 2 - 40, 102), (80, 80)))
         icon_path = ROOT / "friday" / "assets" / "orb_icon_processed.png"
         if icon_path.exists():
             image = NSImage.alloc().initByReferencingFile_(str(icon_path))
             self.orb_view.setImage_(image)
+        
+        self.orb_view.setWantsLayer_(True)
         self.window.contentView().addSubview_(self.orb_view)
         self.window.setAlphaValue_(0.0)
         self.window.orderFrontRegardless()
@@ -311,8 +322,38 @@ class FridayMenuBar(rumps.App):
     def _set_overlay_visible(self, visible: bool):
         def _animate():
             self.window.animator().setAlphaValue_(1.0 if visible else 0.0)
+            if visible:
+                self._update_orb_animation()
 
         callAfter(_animate)
+
+    def _update_orb_animation(self):
+        if not hasattr(self, "orb_view") or not self.orb_view:
+            return
+
+        layer = self.orb_view.layer()
+        layer.removeAllAnimations()
+
+        if self.state in [FridayState.LISTENING, FridayState.CAPTURED]:
+            # Pulsing animation for listening
+            pulse = CABasicAnimation.animationWithKeyPath_("transform.scale")
+            pulse.setFromValue_(1.0)
+            pulse.setToValue_(1.15)
+            pulse.setDuration_(0.8)
+            pulse.setAutoreverses_(True)
+            pulse.setRepeatCount_(float("inf"))
+            pulse.setTimingFunction_(
+                CAMediaTimingFunction.functionWithName_(kCAMediaTimingFunctionEaseInEaseOut)
+            )
+            layer.addAnimation_forKey_(pulse, "pulse")
+        elif self.state == FridayState.PROCESSING:
+            # Rotation animation for thinking
+            rotate = CABasicAnimation.animationWithKeyPath_("transform.rotation.z")
+            rotate.setFromValue_(0)
+            rotate.setToValue_(2 * math.pi)
+            rotate.setDuration_(2.0)
+            rotate.setRepeatCount_(float("inf"))
+            layer.addAnimation_forKey_(rotate, "rotate")
 
     def _set_overlay_text(self, text: str):
         callAfter(self.window.label.setStringValue_, text)

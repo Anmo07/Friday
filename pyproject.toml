@@ -45,6 +45,9 @@ friday = "friday.menubar:main"
 where = ["."]
 include = ["friday*"]
 
+[tool.setuptools.package-data]
+friday = ["assets/*.png", "assets/*.jpg", "assets/*.icns"]
+
 [tool.pyrefly]
 search_path = ["friday"]
 

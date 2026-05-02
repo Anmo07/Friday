@@ -16,3 +16,97 @@ If you want to use ffmpeg backend to load audio, please install it by:
 2026-05-02 22:24:23,015 [INFO] core.pipeline: AntigravityPipeline (Next-Gen) initialized for public in 2.08s
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://localhost:8001 (Press CTRL+C to quit)
+2026-05-03 00:08:42,547 [WARNING] root: No API keys were configured. Generated an ephemeral local development key. Set VERITAS_DEV_API_KEY and VERITAS_ENTERPRISE_API_KEY in production.
+INFO:     ::1:54359 - "WebSocket /ws/stream" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     ::1:54360 - "WebSocket /ws/stream" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     ::1:54361 - "WebSocket /ws/stream" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     ::1:54362 - "WebSocket /ws/stream" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     ::1:54363 - "OPTIONS /api/v1/stream HTTP/1.1" 200 OK
+INFO:     ::1:54364 - "WebSocket /ws/stream" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     ::1:54363 - "POST /api/v1/stream HTTP/1.1" 200 OK
+INFO:     ::1:54390 - "WebSocket /ws/stream" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     ::1:54391 - "WebSocket /ws/stream" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     ::1:54392 - "WebSocket /ws/stream" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     ::1:54393 - "WebSocket /ws/stream" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     ::1:54394 - "WebSocket /ws/stream" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     ::1:54395 - "WebSocket /ws/stream" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     ::1:54396 - "WebSocket /ws/stream" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     ::1:54397 - "WebSocket /ws/stream" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     ::1:54398 - "WebSocket /ws/stream" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     ::1:54399 - "WebSocket /ws/stream" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     ::1:54400 - "WebSocket /ws/stream" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     ::1:54401 - "WebSocket /ws/stream" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     ::1:54402 - "WebSocket /ws/stream" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     ::1:54403 - "WebSocket /ws/stream" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     ::1:54404 - "WebSocket /ws/stream" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     ::1:54405 - "WebSocket /ws/stream" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     ::1:54406 - "WebSocket /ws/stream" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     ::1:54413 - "WebSocket /ws/stream" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     ::1:54415 - "WebSocket /ws/stream" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     ::1:54416 - "WebSocket /ws/stream" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     ::1:54417 - "WebSocket /ws/stream" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     ::1:54418 - "WebSocket /ws/stream" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     ::1:54420 - "WebSocket /ws/stream" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     ::1:54421 - "WebSocket /ws/stream" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     ::1:54422 - "WebSocket /ws/stream" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     ::1:54606 - "POST /api/v1/voice/stream HTTP/1.1" 200 OK
