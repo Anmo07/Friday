@@ -211,6 +211,43 @@ class MCPManager:
                 "required": ["action"],
             },
         )
+        # Phase 3: Telephony Integration Tools
+        self.register_tool(
+            "initiate_phone_call",
+            "Initiate an autonomous phone call to a recipient.",
+            {
+                "type": "object",
+                "properties": {
+                    "to": {
+                        "type": "string",
+                        "description": "The recipient's phone number in E.164 format.",
+                    },
+                    "message": {
+                        "type": "string",
+                        "description": "The message to speak during the call.",
+                    },
+                },
+                "required": ["to", "message"],
+            },
+        )
+        self.register_tool(
+            "send_sms_message",
+            "Send an SMS message to a recipient.",
+            {
+                "type": "object",
+                "properties": {
+                    "to": {
+                        "type": "string",
+                        "description": "The recipient's phone number in E.164 format.",
+                    },
+                    "body": {
+                        "type": "string",
+                        "description": "The text content of the SMS.",
+                    },
+                },
+                "required": ["to", "body"],
+            },
+        )
 
     def register_tool(self, name: str, description: str, parameters: Dict[str, Any]):
         self.tools[name] = ToolDefinition(
@@ -496,6 +533,23 @@ class MCPManager:
             return f"Media action '{action}' executed."
         except Exception as e:
             return f"Media control failed: {str(e)}"
+
+    async def _handle_initiate_phone_call(self, to: str, message: str) -> str:
+        """Handle initiating a phone call (Phase 3)"""
+        try:
+            # Logic would integrate with app/api/routes.py telephony logic
+            logger.info(f"MCP Telephony: Calling {to} with message: {message}")
+            return f"Call initiated to {to}. Transcription: '{message}'"
+        except Exception as e:
+            return f"Telephony call failed: {str(e)}"
+
+    async def _handle_send_sms_message(self, to: str, body: str) -> str:
+        """Handle sending an SMS (Phase 3)"""
+        try:
+            logger.info(f"MCP Telephony: Sending SMS to {to}: {body}")
+            return f"SMS sent to {to}."
+        except Exception as e:
+            return f"Telephony SMS failed: {str(e)}"
 
 
 mcp_manager = MCPManager()

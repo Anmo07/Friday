@@ -244,7 +244,17 @@ class FridayPipeline:
     async def retrieve_vector(self, query: str): return await self.vector_db.asimilarity_search(query)
     async def retrieve_parallel(self, query: str):
         return await asyncio.gather(self.retrieve_vector(query), self.graph_db.aquery_graph(query))
-    def reciprocal_rank_fusion(self, v, g): return v + g # Simplified fusion
+    
+    def reciprocal_rank_fusion(self, vector_results: list, graph_results: list, k: int = 60) -> list:
+        rrf_scores = {}
+        # The results might be list of dicts with 'id'
+        for rank, doc in enumerate(vector_results):
+            doc_id = doc.get("id") if isinstance(doc, dict) else str(doc)
+            rrf_scores[doc_id] = rrf_scores.get(doc_id, 0.0) + 1 / (k + rank + 1)
+        for rank, doc in enumerate(graph_results):
+            doc_id = doc.get("id") if isinstance(doc, dict) else str(doc)
+            rrf_scores[doc_id] = rrf_scores.get(doc_id, 0.0) + 1 / (k + rank + 1)
+        return sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)
     
     def _get_llm(self, model: str, temp=0.0):
         from models.ollama_runtime import create_ollama_llm
@@ -265,3 +275,29 @@ class FridayPipeline:
     async def _run_verification_agent(self, d, c):
         llm = self._get_llm("llama3.1:8b-instruct")
         return await llm.ainvoke(f"Verified: {d}")
+
+    async def stream_run(self, query: str, voice_mode: bool = False) -> AsyncGenerator[str, None]:
+        tier = await self.classify(query)
+        prompt = f"System: {query}"
+        model = "phi3:mini"
+        yield self._sse_event("meta", {"tier": tier, "model": model})
+        async for token in self._stream_ollama(prompt, model):
+            yield self._sse_event("token", {"t": token})
+        yield self._sse_event("done", {})
+
+    async def _stream_ollama(self, prompt: str, model: str) -> AsyncGenerator[str, None]:
+        from app.core.config import settings
+        payload = {"model": model, "prompt": prompt, "stream": True}
+        try:
+            resp = requests.post(f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/generate", json=payload, stream=True)
+            for line in resp.iter_lines():
+                if line:
+                    chunk = json.loads(line)
+                    token = chunk.get("response", "")
+                    if token: yield token
+        except Exception as e:
+            logger.error(f"Stream error: {e}")
+
+    @staticmethod
+    def _sse_event(event_type: str, data: Any) -> str:
+        return f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
