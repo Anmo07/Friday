@@ -23,6 +23,8 @@ class VoiceListener:
         self._task: Optional[asyncio.Task] = None
         self._callback: Optional[Callable[[bytes], Awaitable]] = None
         self._ambient_energy = 0.0
+        self.current_rms = 0.0
+        self.ambient_rms_rolling = energy_threshold
 
     async def calibrate(self, duration: float = 1.0):
         """Sample ambient noise to set a baseline energy threshold"""
@@ -149,6 +151,8 @@ class VoiceListener:
         except Exception as e:
             logger.error(f"Acoustic monitor failed: {e}")
             self._running = False
+            import rumps
+            rumps.notification("Friday Error", "Microphone Access Failed", "Please ensure no other app is using the mic and permissions are granted.")
 
     async def _capture_short_window(self, queue: asyncio.Queue, initial: bytes) -> bytes:
         """Capture ~1.5s of audio to check for wake word."""

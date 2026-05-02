@@ -45,15 +45,21 @@ class FridayMenuBarApp(rumps.App):
     def __init__(self):
         icon_path = os.path.join(PACKAGE_DIR, "assets", "orb_icon_processed.png")
         super(FridayMenuBarApp, self).__init__("FRIDAY", icon=icon_path if os.path.exists(icon_path) else None)
+        
+        # State & Backend
         self.state = FridayState.IDLE
         self.pipeline = FridayPipeline()
         self.loop = asyncio.new_event_loop()
         self.listening = True
-        self.title = None # Clean menu bar: No text, just the Orb
+        self.title = None
+        
+        # UI References
+        self.status_item = rumps.MenuItem("Neural Status: Active", callback=None)
+        self.signal_item = rumps.MenuItem("Neural Signal: Init...", callback=None)
         
         self.menu = [
-            rumps.MenuItem("Neural Status: Active", callback=None),
-            rumps.MenuItem("Acoustic Levels: 0/0", callback=None),
+            self.status_item,
+            self.signal_item,
             None,
             rumps.MenuItem("Start at Login", callback=self.toggle_login_item),
             rumps.MenuItem("Pause Acoustic Monitor", callback=self.toggle_listening),
@@ -62,13 +68,17 @@ class FridayMenuBarApp(rumps.App):
             rumps.MenuItem("Friday Intelligence v0.2.0", callback=self.about),
         ]
         
-        # Timer for debug text
-        self.debug_timer = rumps.Timer(self._update_debug_text, 0.5)
+        # Timer for real-time acoustic signal monitoring
+        self.debug_timer = rumps.Timer(self._update_debug_text, 0.4)
         self.debug_timer.start()
 
     def _update_debug_text(self, _):
         from app.voice.listener import listener
-        self.menu["Acoustic Levels: 0/0"].title = f"Neural Signal: {int(listener.current_rms)} / {int(listener.ambient_rms_rolling)}"
+        try:
+            cur = int(getattr(listener, "current_rms", 0))
+            amb = int(getattr(listener, "ambient_rms_rolling", 0))
+            self.signal_item.title = f"Neural Signal: {cur} / {amb}"
+        except: pass
         
         # Initialize Native Overlay
         self._setup_native_overlay()
