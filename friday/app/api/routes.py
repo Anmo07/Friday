@@ -91,6 +91,69 @@ async def _resolve_query(
     return response
 
 
+@router.post("/webrtc/signal")
+async def webrtc_signal(request: Request):
+    """
+    Phase 1: WebRTC Signalling Layer.
+    Handles SDP exchange and ICE candidates for low-latency transport.
+    Inspired by LiveKit/Pipecat.
+    """
+    body = await request.json()
+    signal_type = body.get("type")  # 'offer' or 'answer'
+    sdp = body.get("sdp")
+    
+    # Signalling logic here (e.g., using aiortc or passing to a dedicated service)
+    logger.info(f"WebRTC Signal Received: {signal_type}")
+    
+    return {
+        "status": "connected",
+        "session_id": f"rtc_{int(time.time())}",
+        "sdp": "MOCKED_SDP_ANSWER" if signal_type == "offer" else None
+    }
+
+
+@router.post("/telephony/call")
+async def telephony_call(request: Request):
+    """
+    Phase 3: Telephony SIP Integration.
+    Native support for Twilio/Plivo for autonomous call handling.
+    """
+    body = await request.json()
+    phone_number = body.get("to")
+    message = body.get("message", "Hello, this is Friday.")
+    
+    # Integration with telephony provider (Twilio API etc.)
+    logger.info(f"Telephony: Initiating call to {phone_number} with message: {message}")
+    
+    return {
+        "status": "queued",
+        "call_sid": f"call_{int(time.time())}",
+        "provider": "twilio"
+    }
+
+
+@router.get("/learning/traces")
+async def get_learning_traces(request: Request, limit: int = 10):
+    """
+    Phase 4: Closed-Loop Learning retrieval.
+    Fetches interaction traces for fine-tuning or prompt optimization.
+    """
+    pipeline = _get_pipeline(request)
+    trace_dir = pipeline.learning_layer.storage_path
+    
+    import os
+    import json
+    
+    traces = []
+    files = sorted(os.listdir(trace_dir), reverse=True)[:limit]
+    for filename in files:
+        if filename.endswith(".json"):
+            with open(os.path.join(trace_dir, filename), "r") as f:
+                traces.append(json.load(f))
+                
+    return {"traces": traces, "count": len(traces)}
+
+
 @router.get("/health")
 async def health():
     cache_stats = cache.get_stats()

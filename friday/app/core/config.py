@@ -64,6 +64,27 @@ class Settings(BaseSettings):
     ENABLE_STREAMING: bool = True
     STREAM_CHUNK_SIZE: int = 100
 
+    # Next-Gen Voice Engine Configuration
+    ENABLE_WEBRTC: bool = True
+    WEBRTC_STUN_SERVER: str = "stun:stun.l.google.com:19302"
+    
+    # Telephony Integration
+    TELEPHONY_PROVIDER: str = "twilio" # twilio or plivo
+    TWILIO_ACCOUNT_SID: str = ""
+    TWILIO_AUTH_TOKEN: str = ""
+    TWILIO_PHONE_NUMBER: str = ""
+    PLIVO_AUTH_ID: str = ""
+    PLIVO_AUTH_TOKEN: str = ""
+    
+    # E2E Audio-Native
+    AUDIO_NATIVE_ENGINE: str = "vibevoice"
+    AUDIO_TOKENIZER_FREQUENCY: float = 7.5 # Hz
+    
+    # Telemetry & Efficiency
+    TRACK_TELEMETRY: bool = True
+    BATTERY_SAVER_THRESHOLD: float = 0.2 # 20%
+    MAX_FLOPS_PER_QUERY: float = 1e12
+
     @property
     def cors_origins(self) -> List[str]:
         return _split_csv(self.CORS_ORIGINS_RAW, ["*"])

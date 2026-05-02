@@ -1,0 +1,54 @@
+# Friday MoE Routing Configuration
+# Defines tiers, model constraints, and hardware-aware scaling logic
+
+tiers:
+  tier_0_audio_native:
+    name: "Audio-Native (E2E)"
+    engine: "VibeVoice"
+    tokenizer_frequency: 7.5  # Hz
+    latency_target_ms: 150
+    models: ["vibevoice-acoustic-v1"]
+    priority: 0
+    description: "End-to-end speech-to-speech for seamless, low-latency interaction."
+
+  tier_1_fast:
+    name: "Fast OS Agent"
+    engine: "Ollama"
+    latency_target_ms: 500
+    models: ["phi3:mini", "llama3.2:3b", "mistral-7b-v0.3"]
+    default_model: "phi3:mini"
+    priority: 1
+    description: "System commands, quick lookups, and simple automation."
+
+  tier_2_standard:
+    name: "Standard Conversational"
+    engine: "Ollama"
+    latency_target_ms: 1500
+    models: ["llama3.1:8b-instruct", "gemma2:9b"]
+    default_model: "llama3.1:8b-instruct"
+    priority: 2
+    description: "General questions, context-aware chatting, and information retrieval."
+
+  tier_3_deep:
+    name: "Deep Reasoning & Truth Engine"
+    engine: "Ollama"
+    latency_target_ms: 5000
+    models: ["llama3.1:70b", "mistral-large"]
+    default_model: "llama3.1:8b-instruct"  # Fallback for local resource constraints
+    priority: 3
+    description: "Complex analysis, fact-checking, and multi-step reasoning."
+
+routing_rules:
+  battery_saver_mode:
+    threshold: 0.2  # 20% battery
+    action: "downgrade_to_tier_1"
+    force_model: "phi3:mini"
+
+  high_load_scaling:
+    cpu_threshold: 0.85
+    action: "use_compressed_tokenizers"
+
+telemetry:
+  track_energy: true
+  track_flops: true
+  cost_per_million_tokens: 0.0  # Local models are free, but can be configured for cloud fallbacks
