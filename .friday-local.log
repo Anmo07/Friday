@@ -144,3 +144,21 @@ INFO:     127.0.0.1:54999 - "WebSocket /ws/stream" [accepted]
 INFO:     connection open
 2026-05-02 17:17:13,675 [INFO] app.api.websocket: WebSocket client connected: /ws/stream
 INFO:     connection closed
+INFO:     127.0.0.1:55415 - "GET /api/v1/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55417 - "WebSocket /ws/stream" [accepted]
+2026-05-02 17:31:55,878 [INFO] app.api.websocket: WebSocket client connected: /ws/stream
+INFO:     connection open
+2026-05-02 17:31:55,884 [INFO] app.api.websocket: WebSocket client connected: /ws/stream
+INFO:     connection closed
+INFO:     127.0.0.1:55428 - "GET /api/v1/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55430 - "WebSocket /ws/stream" [accepted]
+2026-05-02 17:32:31,815 [INFO] app.api.websocket: WebSocket client connected: /ws/stream
+INFO:     connection open
+2026-05-02 17:32:31,818 [INFO] app.api.websocket: WebSocket client connected: /ws/stream
+INFO:     connection closed
+INFO:     127.0.0.1:55467 - "GET /api/v1/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55469 - "WebSocket /ws/stream" [accepted]
+2026-05-02 17:33:57,897 [INFO] app.api.websocket: WebSocket client connected: /ws/stream
+INFO:     connection open
+2026-05-02 17:33:57,909 [INFO] app.api.websocket: WebSocket client connected: /ws/stream
+INFO:     connection closed

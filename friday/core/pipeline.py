@@ -168,23 +168,37 @@ class FridayPipeline:
         scaling_factor = self.telemetry.get_scaling_factor()
         
         try:
-            # semantic-router's RouteLayer __call__ is synchronous, so we run in thread
+            # semantic-router's RouteLayer/SemanticRouter __call__ is synchronous, so we run in thread
             route = await asyncio.to_thread(self.router, query)
             
             if route and hasattr(route, 'name') and route.name:
                 tier = route.name
             else:
                 tier = "tier_2_standard"
-            
-            # Dynamic scaling: Downgrade tier if battery is low
-            if scaling_factor < 0.6 and tier == "tier_3_deep":
-                logger.info("Telemetry Trigger: Downgrading Tier 3 -> Tier 2 due to power constraints.")
-                tier = "tier_2_standard"
-                
-            return tier
         except Exception as e:
-            logger.error(f"Classification failed: {e}")
-            return "tier_2_standard"
+            if "Index is not ready" in str(e):
+                logger.warning("Semantic Router index not ready. Using intent-based fallback.")
+                tier = self._detect_tier_fallback(query)
+            else:
+                logger.error(f"Classification failed: {e}")
+                tier = "tier_2_standard"
+        
+        # Dynamic scaling: Downgrade tier if battery is low
+        if scaling_factor < 0.6 and tier == "tier_3_deep":
+            logger.info("Telemetry Trigger: Downgrading Tier 3 -> Tier 2 due to power constraints.")
+            tier = "tier_2_standard"
+            
+        return tier
+
+    def _detect_tier_fallback(self, query: str) -> str:
+        q = query.lower()
+        if any(w in q for w in ["open", "set", "volume", "alarm"]):
+            return "tier_1_fast"
+        if any(w in q for w in ["verify", "investigate", "report", "cross-reference"]):
+            return "tier_3_deep"
+        if any(w in q for w in ["talk", "listen", "therapist"]):
+            return "tier_0_audio_native"
+        return "tier_2_standard"
 
     async def run(self, query: str, voice_mode: bool = False) -> Dict[str, Any]:
         start_time = time.monotonic()
