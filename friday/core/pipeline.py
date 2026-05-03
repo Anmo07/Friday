@@ -52,8 +52,6 @@ class SemanticTurnDetector:
 
 from .observability import TelemetryManager
 
-    async def retrieve_vector(self, query: str): return await self.vector_db.asimilarity_search(query)
-
 class EmotionEngine:
     """
     Multimodal Emotion Recognition (MER) system.
@@ -451,10 +449,43 @@ class FridayPipeline:
         elif tier == "tier_2_standard":
             model = "llama3.1:8b"
             
-        prompt = f"System: {query}"
+        current_dt = datetime.now().strftime("%A, %B %d, %Y %I:%M %p")
+        tools_str = json.dumps(self.mcp.get_tool_schemas(), indent=2)
+        
+        system_prompt = (
+            f"{friday_personality.get_system_prompt(mode='assistant')}\n"
+            f"Context: Today is {current_dt}.\n"
+            "STRICT: Keep it short for voice interaction.\n"
+            f"AVAILABLE TOOLS:\n{tools_str}\n"
+            "If a tool is needed, respond with ONLY a JSON object: {\"tool\": \"name\", \"args\": {...}}"
+        )
+        prompt = f"System: {system_prompt}\nUser: {query}"
         yield self._sse_event("meta", {"tier": tier, "model": model})
+        
+        full_response = ""
         async for token in self._stream_ollama(prompt, model):
+            full_response += token
             yield self._sse_event("token", {"t": token})
+            
+        # Check for tool call in the response
+        if "{\"tool\":" in full_response:
+             try:
+                 start = full_response.find("{\"tool\":")
+                 end = full_response.rfind("}") + 1
+                 tool_json = json.loads(full_response[start:end])
+                 tool_name = tool_json.get("tool")
+                 tool_args = tool_json.get("args", {})
+                 
+                 yield self._sse_event("token", {"t": f"\n[Executing {tool_name}...]"})
+                 tool_result = await self.mcp.execute_tool(tool_name, tool_args)
+                 
+                 # Follow up with the result
+                 follow_up_prompt = f"{prompt}\nAssistant: {full_response}\nSystem (Tool Result): {tool_result}"
+                 async for token in self._stream_ollama(follow_up_prompt, model):
+                     yield self._sse_event("token", {"t": token})
+             except Exception as e:
+                 logger.error(f"Tool execution loop failed: {e}")
+
         yield self._sse_event("done", {})
 
     async def _stream_ollama(self, prompt: str, model: str) -> AsyncGenerator[str, None]:
@@ -472,6 +503,9 @@ class FridayPipeline:
                             chunk = json.loads(line)
                             token = chunk.get("response", "")
                             if token:
+                                # Strip common LLM artifacts/prefixes
+                                if any(p in token for p in ["System:", "Assistant:", "AI@BotCorp"]):
+                                    continue
                                 yield token
                             if chunk.get("done"):
                                 break

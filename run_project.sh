@@ -23,15 +23,15 @@ case "$ACTION" in
         ;;
     stop)
         echo "Stopping Friday..."
-        pkill -f "friday/menubar.py" || echo "Friday was not running."
+        pkill -9 -f "macos_menu_bar" || pkill -9 -f "friday/bin" || echo "Friday was not running."
         ;;
     restart)
         "$0" stop
-        sleep 1
+        sleep 2
         "$0" start
         ;;
     status)
-        if pgrep -f "friday/menubar.py" > /dev/null; then
+        if pgrep -f "macos_menu_bar" > /dev/null; then
             echo "Friday is ACTIVE and running in the Menu Bar."
         else
             echo "Friday is INACTIVE."

@@ -24,6 +24,8 @@ except ImportError:
     torch_f = None
     AutoModel = None
 
+from app.core.config import settings
+
 logger = logging.getLogger(__name__)
 
 
@@ -40,6 +42,7 @@ class VoiceListener:
         self.sample_rate = sample_rate
         self.chunk_size = chunk_size
         self.mic_gain = 1.5 # 50% boost
+        self.enabled = True
 
         self._running = False
         self._task: Optional[asyncio.Task] = None
@@ -325,6 +328,11 @@ class VoiceListener:
         return np.concatenate([audio_np[start:end] for start, end in segments])
 
     async def verify_speaker(self, audio_bytes: bytes) -> bool:
+        # Quick bypass for latency testing
+        if settings.BYPASS_SPEAKER_VERIFICATION:
+            logger.debug("Speaker verification bypassed (config).")
+            return True
+
         if self.user_embedding is None:
             logger.info("Voice profile missing. Allowing trigger in unsecure mode.")
             return True
@@ -440,11 +448,10 @@ class VoiceListener:
             self._ambient_energy = rms
             self.ambient_rms_rolling = max(rms, 1.0)
             self.ambient_peak_rolling = max(
-                float(np.max(np.abs(recording))),
                 rms * 2.0,
                 1.0,
             )
-            self.energy_threshold = max(rms * 2.5, 300.0)
+            self.energy_threshold = max(rms * 2.5, 600.0)
             logger.info(
                 "Calibration complete. Ambient RMS %.0f, threshold %.0f.",
                 rms,
@@ -556,6 +563,10 @@ class VoiceListener:
                 )
                 while self._running:
                     raw_chunk = await queue.get()
+                    
+                    if not self.enabled:
+                        continue
+                        
                     audio_chunk = self._resample(raw_chunk.flatten(), hw_sample_rate)
                     audio_bytes = audio_chunk.tobytes()
 
@@ -570,6 +581,16 @@ class VoiceListener:
                         self.ambient_peak_rolling = (
                             self.ambient_peak_rolling * 0.98 + self.current_peak * 0.02
                         )
+
+                    # VAD gate: skip silent chunks to save STT compute
+                    try:
+                        from app.voice.vad import vad
+                        if not vad.is_speech(audio_chunk):
+                            audio_buffer.append(audio_bytes)
+                            await asyncio.sleep(0.005)
+                            continue
+                    except ImportError:
+                        pass
 
                     audio_buffer.append(audio_bytes)
 

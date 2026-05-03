@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     # Privacy & Local-First Configuration
     PRIVACY_MODE: bool = False  # If True, disable all cloud-dependent features
     USE_LOCAL_TTS: bool = False # If True, use Piper instead of Edge-TTS
+    USE_NATIVE_TTS: bool = True  # If True, use macOS NSSpeechSynthesizer (fastest)
+    NATIVE_TTS_VOICE: str = "samantha"  # macOS voice preset
+    NATIVE_TTS_RATE: float = 200.0  # Words per minute
 
     PUBLIC_API_BASE_URL: str = "http://localhost:8001/api/v1"
     PUBLIC_WS_BASE_URL: str = "ws://localhost:8001/ws/stream"
@@ -36,12 +39,17 @@ class Settings(BaseSettings):
     FAST_MODEL: str = "mistral"
     OLLAMA_REQUEST_TIMEOUT_SECONDS: int = 120
     LOCAL_LLM_PROFILE: str = "balanced"
-    STT_MODEL_SIZE: str = "base"
+    STT_MODEL_SIZE: str = "base.en"  # MLX model: tiny.en, base.en, small.en
     STT_DEVICE: str = "cpu"
     STT_COMPUTE_TYPE: str = "int8"
-    TTS_PROVIDER: str = "edge-tts"
+    STT_ENGINE: str = "mlx"  # Options: mlx, whisper, funasr
+    TTS_PROVIDER: str = "native"  # Options: native, edge-tts, piper
     TTS_VOICE_PROFILE: str = "en-US-JennyNeural"
     TTS_SPEECH_RATE: int = 190
+    
+    # Speaker Verification
+    BYPASS_SPEAKER_VERIFICATION: bool = False  # Set True for latency testing
+    USE_LIGHTWEIGHT_SV: bool = True  # Use ONNX Resemblyzer instead of FunASR
     CONTROL_CONFIRMATION_POLICY: str = "confirm_high_risk"
     CONTROL_AUDIT_LOG_PATH: str = "./logs/control_audit.log"
     CONTROL_ALLOW_FULL_AUTO: bool = False

@@ -60,6 +60,7 @@ nest_asyncio.apply()
 from friday.app.core.config import settings
 from friday.app.voice.listener import listener
 from friday.app.voice.stt_service import stt_service
+from friday.app.voice.tts_service import tts_service
 from friday.core.startup_validation import validate_startup
 
 LOG_DIR = ROOT / "logs"
@@ -147,7 +148,7 @@ class SiriResponseWindow(NSWindow):
 class FridayMenuBar(rumps.App):
     def __init__(self):
         icon_path = ROOT / "friday" / "assets" / "orb_icon_processed.png"
-        super().__init__("FRIDAY", icon=str(icon_path) if icon_path.exists() else None)
+        super().__init__("FRIDAY", icon=str(icon_path) if icon_path.exists() else None, quit_button=None)
 
         self.state = FridayState.IDLE
         self.loop = asyncio.new_event_loop()
@@ -224,13 +225,15 @@ class FridayMenuBar(rumps.App):
         except Exception as e:
             logger.error(f"Event loop died: {e}", exc_info=True)
 
-    async def force_trigger(self, _):
+    def force_trigger(self, _):
         logger.info("Manual trigger activated via Menu Bar.")
+        asyncio.run_coroutine_threadsafe(self._force_trigger_task(), self.loop)
+
+    async def _force_trigger_task(self):
         self._set_state(FridayState.PROCESSING)
         self._set_overlay_text("I'm listening...")
         self._set_overlay_visible(True)
-        # We can't easily inject audio, but we can simulate a trigger
-        asyncio.create_task(self.execute_pipeline("hello friday"))
+        await self.execute_pipeline("hello friday")
 
     async def _bootstrap(self):
         """Initializes the backend, validates services, and starts the acoustic monitor."""
@@ -429,13 +432,14 @@ class FridayMenuBar(rumps.App):
             )
             layer.addAnimation_forKey_(pulse, "pulse")
         elif self.state == FridayState.PROCESSING:
-            # Rotation animation for thinking
-            rotate = CABasicAnimation.animationWithKeyPath_("transform.rotation.z")
-            rotate.setFromValue_(0)
-            rotate.setToValue_(2 * math.pi)
-            rotate.setDuration_(2.0)
-            rotate.setRepeatCount_(float("inf"))
-            layer.addAnimation_forKey_(rotate, "rotate")
+            # Subtle glow/pulse for thinking, no rotation
+            glow = CABasicAnimation.animationWithKeyPath_("opacity")
+            glow.setFromValue_(1.0)
+            glow.setToValue_(0.4)
+            glow.setDuration_(1.2)
+            glow.setAutoreverses_(True)
+            glow.setRepeatCount_(float("inf"))
+            layer.addAnimation_forKey_(glow, "glow")
 
     def _set_overlay_text(self, text: str):
         def _update():
@@ -476,6 +480,26 @@ class FridayMenuBar(rumps.App):
                     )
                     self._set_overlay_visible(False)
                     return
+                
+                # Check for voice-triggered enrollment
+                if any(cmd in text.lower() for cmd in ["enroll my voice", "set up my voice", "identify my voice", "voice setup"]):
+                    logger.info("Voice enrollment triggered by voice command.")
+                    await self._enroll_voice_profile()
+                    return
+
+                # Proactive Enrollment Prompt
+                if not listener.has_voice_profile:
+                    logger.info("No voice profile found. Prompting for proactive enrollment.")
+                    # Acknowledge the query first but then suggest setup
+                    # We'll let the pipeline run, but we can also just pivot to setup
+                    # Let's pivot to setup if the user is just saying 'hello' or 'hey friday'
+                    if len(text.split()) <= 3:
+                         self._set_overlay_text("I don't recognize you yet, Boss. Let's set up your voice profile.")
+                         self._set_overlay_visible(True)
+                         await asyncio.sleep(2.0)
+                         await self._enroll_voice_profile()
+                         return
+
                 await self.execute_pipeline(text)
             except Exception as exc:
                 logger.error("Audio processing failed: %s", exc, exc_info=True)
@@ -497,7 +521,6 @@ class FridayMenuBar(rumps.App):
         phrase_buffer = ""
 
         try:
-            self._set_overlay_text("")
             async for event_name, payload in self._stream_response_events(text):
                 if event_name == "token":
                     token = payload.get("t", "")
@@ -505,13 +528,14 @@ class FridayMenuBar(rumps.App):
                         continue
                     full_response += token
                     phrase_buffer += token
-                    self._set_overlay_text(full_response)
 
                     ready_phrases, phrase_buffer = self._split_ready_phrases(
                         phrase_buffer
                     )
                     for phrase in ready_phrases:
                         await phrase_queue.put(phrase)
+                elif event_name == "done":
+                    break
                 elif event_name == "done":
                     break
 
@@ -526,8 +550,14 @@ class FridayMenuBar(rumps.App):
         finally:
             await phrase_queue.put(None)
             await audio_task
-            await asyncio.sleep(1.2)
+            await asyncio.sleep(2.0) # Keep visible for a moment after speaking
             self._set_overlay_visible(False)
+            self._spoken_text = ""
+            
+            # Re-enable listener
+            listener.enabled = True
+            
+            await asyncio.sleep(1.2)
             self._set_state(
                 FridayState.LISTENING
             )
@@ -582,7 +612,22 @@ class FridayMenuBar(rumps.App):
 
                 logger.info(f"Reciting: {cleaned[:50]}...")
                 self._set_state(FridayState.RESPONDING)
-                audio_path = await self._fetch_tts_audio(cleaned)
+                
+                # Mute listener while speaking
+                listener.enabled = False
+                
+                # Show text in sync with recitation
+                self._set_overlay_visible(True)
+                current_text = getattr(self, "_spoken_text", "")
+                self._spoken_text = current_text + " " + cleaned
+                self._set_overlay_text(self._spoken_text)
+                
+                # Use local TTS directly (bypass network round-trip)
+                audio_path = await tts_service.synthesize_to_file(cleaned)
+                if not audio_path:
+                    # Fallback to network TTS
+                    audio_path = await self._fetch_tts_audio(cleaned)
+                
                 if not audio_path:
                     logger.warning("Failed to fetch TTS audio")
                     continue
@@ -648,6 +693,7 @@ class FridayMenuBar(rumps.App):
         return ready, buffer
 
     def enroll_voice(self, _):
+        logger.info("Voice enrollment requested.")
         asyncio.run_coroutine_threadsafe(self._enroll_voice_profile(), self.loop)
 
     async def _enroll_voice_profile(self):
@@ -689,6 +735,7 @@ class FridayMenuBar(rumps.App):
         self._set_state(target_state)
 
     def reset_overlay(self, _):
+        logger.info("Overlay reset requested.")
         self._set_overlay_text("")
         self._set_overlay_visible(False)
 

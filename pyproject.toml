@@ -41,6 +41,28 @@ dependencies = [
     "pyobjc-framework-Cocoa>=10.0",
 ]
 
+[project.optional-dependencies]
+# Metal-accelerated ML (Apple Silicon only)
+metal = [
+    "mlx>=0.16.0",
+    "mlx-whisper>=0.4.0",
+]
+# Lightweight speaker verification
+sv = [
+    "onnxruntime-silicon>=1.17.0",
+]
+# Robust voice activity detection
+vad = [
+    "webrtcvad>=2.0.10",
+]
+# All optimizations
+turbo = [
+    "mlx>=0.16.0",
+    "mlx-whisper>=0.4.0",
+    "onnxruntime-silicon>=1.17.0",
+    "webrtcvad>=2.0.10",
+]
+
 [project.scripts]
 friday = "friday.menubar:main"
 

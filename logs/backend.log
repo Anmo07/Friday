@@ -110,3 +110,34 @@ INFO:     ::1:54422 - "WebSocket /ws/stream" [accepted]
 INFO:     connection open
 INFO:     connection closed
 INFO:     ::1:54606 - "POST /api/v1/voice/stream HTTP/1.1" 200 OK
+INFO:     ::1:55204 - "POST /api/v1/stream HTTP/1.1" 200 OK
+INFO:     ::1:55221 - "POST /api/v1/voice/stream HTTP/1.1" 200 OK
+INFO:     ::1:55227 - "POST /api/v1/voice/stream HTTP/1.1" 200 OK
+INFO:     ::1:55227 - "POST /api/v1/voice/stream HTTP/1.1" 200 OK
+INFO:     ::1:55235 - "POST /api/v1/voice/stream HTTP/1.1" 200 OK
+INFO:     ::1:55367 - "POST /api/v1/stream HTTP/1.1" 200 OK
+INFO:     ::1:55368 - "POST /api/v1/stream HTTP/1.1" 200 OK
+INFO:     ::1:55383 - "POST /api/v1/voice/stream HTTP/1.1" 200 OK
+INFO:     ::1:55383 - "POST /api/v1/voice/stream HTTP/1.1" 200 OK
+INFO:     ::1:55386 - "POST /api/v1/voice/stream HTTP/1.1" 200 OK
+INFO:     ::1:55386 - "POST /api/v1/voice/stream HTTP/1.1" 200 OK
+INFO:     ::1:55386 - "POST /api/v1/voice/stream HTTP/1.1" 200 OK
+INFO:     ::1:55390 - "POST /api/v1/voice/stream HTTP/1.1" 200 OK
+INFO:     ::1:55390 - "POST /api/v1/voice/stream HTTP/1.1" 200 OK
+INFO:     ::1:55396 - "POST /api/v1/voice/stream HTTP/1.1" 200 OK
+INFO:     ::1:55471 - "POST /api/v1/stream HTTP/1.1" 200 OK
+INFO:     ::1:55478 - "POST /api/v1/voice/stream HTTP/1.1" 200 OK
+INFO:     ::1:55481 - "POST /api/v1/voice/stream HTTP/1.1" 200 OK
+INFO:     ::1:55481 - "POST /api/v1/voice/stream HTTP/1.1" 200 OK
+INFO:     ::1:55485 - "POST /api/v1/voice/stream HTTP/1.1" 200 OK
+INFO:     ::1:55494 - "POST /api/v1/voice/stream HTTP/1.1" 200 OK
+INFO:     ::1:55549 - "POST /api/v1/stream HTTP/1.1" 200 OK
+INFO:     ::1:55553 - "POST /api/v1/voice/stream HTTP/1.1" 200 OK
+INFO:     ::1:55556 - "POST /api/v1/voice/stream HTTP/1.1" 200 OK
+INFO:     ::1:55572 - "POST /api/v1/stream HTTP/1.1" 200 OK
+INFO:     ::1:55575 - "POST /api/v1/voice/stream HTTP/1.1" 200 OK
+INFO:     ::1:55577 - "POST /api/v1/voice/stream HTTP/1.1" 200 OK
+INFO:     ::1:55584 - "POST /api/v1/voice/stream HTTP/1.1" 200 OK
+INFO:     ::1:55586 - "POST /api/v1/voice/stream HTTP/1.1" 200 OK
+INFO:     ::1:55586 - "POST /api/v1/voice/stream HTTP/1.1" 200 OK
+2026-05-03 01:12:36,198 [ERROR] app.voice.tts_service: TTS Stream Error: No audio was received. Please verify that your parameters are correct.

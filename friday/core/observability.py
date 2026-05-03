@@ -132,3 +132,21 @@ class TelemetryManager:
         if self.stats["battery_level"] < 0.3 or self.is_on_battery:
             return 0.7  # Balanced mode
         return 1.0
+
+    def get_stt_model_size(self) -> str:
+        """
+        Dynamic STT model selection based on power state.
+        Saves battery by using smaller models when on battery power.
+        
+        Returns:
+            Model size string for MLX-Whisper.
+        """
+        self._load_hardware_baseline()  # Refresh battery state
+        battery = self.stats["battery_level"]
+
+        if battery < 0.2:
+            return "tiny.en"   # ~100ms, ~200MB — ultra power saver
+        elif battery < 0.5 or self.is_on_battery:
+            return "small.en"  # ~150ms, ~400MB — balanced
+        else:
+            return "base.en"   # ~200ms, ~800MB — full quality
