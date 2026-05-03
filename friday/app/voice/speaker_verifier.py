@@ -27,7 +27,15 @@ except ImportError:
 class LightweightSpeakerVerifier:
     """ONNX-based speaker verification (~30ms vs FunASR ~200ms)."""
 
-    def __init__(self, threshold: float = 0.7):
+    def __init__(self, threshold: Optional[float] = None):
+        # Use config threshold if not provided
+        if threshold is None:
+            try:
+                from app.core.config import settings
+                threshold = getattr(settings, 'SPEAKER_VERIFICATION_THRESHOLD', 0.7)
+            except (ImportError, AttributeError):
+                threshold = 0.7
+        
         self.threshold = threshold
         self._session = None
         self._user_embedding: Optional[np.ndarray] = None

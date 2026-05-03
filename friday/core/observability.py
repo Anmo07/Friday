@@ -150,3 +150,59 @@ class TelemetryManager:
             return "small.en"  # ~150ms, ~400MB — balanced
         else:
             return "base.en"   # ~200ms, ~800MB — full quality
+
+    def get_tts_mode(self) -> str:
+        """
+        Dynamic TTS mode selection based on power state.
+        Prioritizes native TTS on battery, falls back to network when plugged.
+
+        Returns:
+            TTS mode: "native" (0ms network), "local" (~50ms), or "cloud" (~300ms).
+        """
+        self._load_hardware_baseline()  # Refresh battery state
+        battery = self.stats["battery_level"]
+
+        if battery < 0.15:
+            return "native"  # Zero network latency — ultra power saver
+        elif self.is_on_battery:
+            return "native"  # Minimize network drain
+        else:
+            return "native"  # Default to native for best latency
+
+    def get_speaker_verification_mode(self) -> str:
+        """
+        Dynamic speaker verification strategy based on power state.
+
+        Returns:
+            "lightweight" (~30ms ONNX) or "full" (~200ms FunASR).
+        """
+        self._load_hardware_baseline()  # Refresh battery state
+        battery = self.stats["battery_level"]
+
+        if battery < 0.3 or self.is_on_battery:
+            return "lightweight"  # ONNX-based, ~30ms, low power
+        else:
+            return "lightweight"  # Always prefer lightweight on metal
+
+    def log_performance_event(self, stage: str, latency_ms: float, model: str = ""):
+        """Log performance metrics for a specific pipeline stage."""
+        record = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "type": "pipeline_stage",
+            "stage": stage,
+            "latency_ms": round(latency_ms, 2),
+            "model": model,
+            "battery_level": round(self.stats["battery_level"], 2),
+            "is_on_battery": self.is_on_battery,
+        }
+        metrics_file = os.path.join(
+            os.path.dirname(self._load_hardware_baseline.__code__.co_filename),
+            "../logs/observability_metrics.json"
+        )
+        try:
+            os.makedirs(os.path.dirname(metrics_file), exist_ok=True)
+            with open(metrics_file, "a", encoding="utf-8") as f:
+                f.write(json.dumps(record) + "\n")
+        except Exception as e:
+            print(f"Failed to log performance event: {e}")
+

@@ -77,6 +77,7 @@ class MLXWhisperSTT:
         self._model_size = model_size
         self._model_path = self.MODEL_MAP.get(model_size, model_size)
         self._loaded = False
+        self._warmup_done = False
 
     def _ensure_loaded(self):
         """
@@ -130,10 +131,14 @@ class MLXWhisperSTT:
                 language="en",
                 word_timestamps=False,
                 condition_on_previous_text=False,
-                # Performance tuning
+                # Performance tuning for Apple Silicon
                 fp16=True,
                 compression_ratio_threshold=2.4,
                 no_speech_threshold=0.6,
+                # Additional optimizations
+                beam_size=1,  # Greedy decoding for speed
+                patience=1.0,  # Minimal beam search patience
+                length_penalty=1.0,
             )
             return result.get("text", "").strip()
 

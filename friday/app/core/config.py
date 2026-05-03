@@ -27,29 +27,23 @@ class Settings(BaseSettings):
     # Privacy & Local-First Configuration
     PRIVACY_MODE: bool = False  # If True, disable all cloud-dependent features
     USE_LOCAL_TTS: bool = False # If True, use Piper instead of Edge-TTS
-    USE_NATIVE_TTS: bool = True  # If True, use macOS NSSpeechSynthesizer (fastest)
-    NATIVE_TTS_VOICE: str = "samantha"  # macOS voice preset
-    NATIVE_TTS_RATE: float = 200.0  # Words per minute
+    USE_NATIVE_TTS: bool = True  # If True, use macOS NSSpeechSynthesizer (fastest, ~50ms)
+    NATIVE_TTS_VOICE: str = "samantha"  # macOS voice preset (alex, samantha, daniel, karen, moira, etc)
+    NATIVE_TTS_RATE: float = 200.0  # Words per minute (default: 200, range: 50-400)
 
-    PUBLIC_API_BASE_URL: str = "http://localhost:8001/api/v1"
-    PUBLIC_WS_BASE_URL: str = "ws://localhost:8001/ws/stream"
-    OLLAMA_BASE_URL: str = "http://localhost:11434"
-    MODEL_NAME: str = "llama3"
-    ROUTER_MODEL: str = "phi3"
-    FAST_MODEL: str = "mistral"
-    OLLAMA_REQUEST_TIMEOUT_SECONDS: int = 120
-    LOCAL_LLM_PROFILE: str = "balanced"
-    STT_MODEL_SIZE: str = "base.en"  # MLX model: tiny.en, base.en, small.en
+    # STT Configuration (Phase 2: Deep Fixes)
+    STT_MODEL_SIZE: str = "base.en"  # MLX model: tiny.en (~100ms), base.en (~200ms), small.en (~300ms)
     STT_DEVICE: str = "cpu"
     STT_COMPUTE_TYPE: str = "int8"
-    STT_ENGINE: str = "mlx"  # Options: mlx, whisper, funasr
-    TTS_PROVIDER: str = "native"  # Options: native, edge-tts, piper
+    STT_ENGINE: str = "mlx"  # Options: mlx (fastest ~200ms), whisper, funasr
+    TTS_PROVIDER: str = "native"  # Options: native (~50ms), edge-tts (~300ms), piper (~100ms)
     TTS_VOICE_PROFILE: str = "en-US-JennyNeural"
     TTS_SPEECH_RATE: int = 190
     
-    # Speaker Verification
-    BYPASS_SPEAKER_VERIFICATION: bool = False  # Set True for latency testing
-    USE_LIGHTWEIGHT_SV: bool = True  # Use ONNX Resemblyzer instead of FunASR
+    # Speaker Verification (Phase 1: Fast Wins)
+    BYPASS_SPEAKER_VERIFICATION: bool = False  # Set True for latency testing (SV: 200ms → 0ms)
+    USE_LIGHTWEIGHT_SV: bool = True  # Use ONNX Resemblyzer instead of FunASR (30ms vs 200ms)
+    SPEAKER_VERIFICATION_THRESHOLD: float = 0.7  # Cosine similarity threshold for ONNX
     CONTROL_CONFIRMATION_POLICY: str = "confirm_high_risk"
     CONTROL_AUDIT_LOG_PATH: str = "./logs/control_audit.log"
     CONTROL_ALLOW_FULL_AUTO: bool = False
